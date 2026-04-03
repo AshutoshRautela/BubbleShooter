@@ -2,6 +2,7 @@ extends Node2D
 
 const BubbleBoardState = preload("res://scripts/board_state.gd")
 const BubbleShotPlanner = preload("res://scripts/shot_planner.gd")
+const BubbleSfxController = preload("res://scripts/sfx_controller.gd")
 
 const GRID_COLUMNS := 9
 const START_ROWS := 6
@@ -13,6 +14,7 @@ const MAX_PARTICLES_MOBILE := 90
 const MAX_PARTICLES_DESKTOP := 180
 const STATE_AIMING := "aiming"
 const STATE_FLYING := "flying"
+const STATE_RESOLVING := "resolving"
 const STATE_GAME_OVER := "game_over"
 
 const COLORS := [
@@ -35,6 +37,7 @@ const COLORS := [
 @onready var overlay_title: Label = $UI/Overlay/Panel/VBox/OverlayTitle
 @onready var overlay_message: Label = $UI/Overlay/Panel/VBox/OverlayMessage
 @onready var overlay_button: Button = $UI/Overlay/Panel/VBox/OverlayButton
+@onready var sfx: BubbleSfxController = $Sfx
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var board: BubbleBoardState = BubbleBoardState.new(GRID_COLUMNS, START_ROWS, SHOTS_PER_SHIFT, COLORS.size())
@@ -43,6 +46,9 @@ var grid: Array[Array] = board.grid
 var active_bubble: Dictionary = {}
 var pop_particles: Array[Dictionary] = []
 var hit_waves: Array[Dictionary] = []
+var pending_bursts: Array[Dictionary] = []
+var burst_bubbles: Array[Dictionary] = []
+var pending_resolution: Dictionary = {}
 var ambient_stars: Array[Dictionary] = []
 
 var aim_target: Vector2 = Vector2.ZERO
@@ -74,6 +80,7 @@ var smoothed_frame_ms: float = 16.0
 var wave_transform_offset: Vector2 = Vector2.ZERO
 var wave_transform_scale: float = 1.0
 var wave_transform_glow: float = 0.0
+var last_pop_haptic_ms: int = -1000
 
 
 func _ready() -> void:
@@ -111,6 +118,16 @@ func _process(delta: float) -> void:
 	if update_hit_waves(delta):
 		animating = true
 		needs_redraw = true
+	if update_pending_bursts(delta):
+		animating = true
+		needs_redraw = true
+	if update_burst_bubbles(delta):
+		animating = true
+		needs_redraw = true
+	if state == STATE_RESOLVING and pending_bursts.is_empty() and burst_bubbles.is_empty():
+		finish_resolution_sequence()
+		animating = true
+		needs_redraw = true
 	update_fps_display(delta)
 
 	if not mobile_low_fx:
@@ -130,6 +147,7 @@ func _draw() -> void:
 	draw_playfield()
 	draw_lose_line()
 	draw_bubbles()
+	draw_burst_bubbles()
 	draw_particles()
 	draw_launcher()
 
@@ -329,6 +347,9 @@ func start_new_game() -> void:
 	active_bubble.clear()
 	pop_particles.clear()
 	hit_waves.clear()
+	pending_bursts.clear()
+	burst_bubbles.clear()
+	pending_resolution.clear()
 	stack_visual_offset = 0.0
 	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
@@ -369,6 +390,7 @@ func fire_bubble() -> void:
 	state = STATE_FLYING
 	launcher_flash = 1.0
 	launcher_recoil = 1.0
+	sfx.play_shoot()
 	queue_redraw()
 
 
@@ -419,6 +441,7 @@ func update_active_bubble(delta: float) -> void:
 
 
 func spawn_bounce_spark(position: Vector2) -> void:
+	sfx.play_wall_bounce()
 	var center_offset: Vector2 = position - Vector2((board_left + board_right) * 0.5, position.y)
 	if center_offset.x <= 0.0:
 		spawn_spark(position + Vector2.RIGHT * bubble_radius * 0.15, COLORS[int(active_bubble["color"])], Vector2.RIGHT * 110.0)
@@ -438,15 +461,47 @@ func place_active_bubble(anchor_cell: Vector2i, hit_ceiling: bool, forced_snap: 
 		spawn_hit_wave(snap_center, 1.25)
 		spawn_stack_impact_sparks(snap_center, COLORS[int(active_bubble["color"])])
 	var resolution: Dictionary = board.resolve_placed_bubble(snap, int(active_bubble["color"]), rng)
-	spawn_resolution_effects(resolution)
 	active_bubble.clear()
+	if has_resolution_bursts(resolution):
+		begin_resolution_sequence(resolution, snap, snap_center)
+		return
+
+	complete_resolution_followup(resolution)
+
+
+func has_resolution_bursts(resolution: Dictionary) -> bool:
+	return not resolution["cluster_bursts"].is_empty() or not resolution["floating_bursts"].is_empty()
+
+
+func begin_resolution_sequence(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> void:
+	pending_resolution = resolution
+	pending_bursts = build_resolution_burst_queue(resolution, start_cell, origin)
+	burst_bubbles.clear()
+	state = STATE_RESOLVING
+	refresh_hud()
+	queue_redraw()
+
+
+func finish_resolution_sequence() -> void:
+	if pending_resolution.is_empty():
+		return
+
+	var resolution: Dictionary = pending_resolution.duplicate(true)
+	pending_resolution.clear()
+	complete_resolution_followup(resolution)
+
+
+func complete_resolution_followup(resolution: Dictionary) -> void:
+	board.apply_resolution_followup(resolution, rng)
 	state = STATE_AIMING
 
 	if resolution["board_cleared"]:
+		sfx.play_board_clear()
 		kick_stack_drop(row_height * 0.58, true)
 		current_color = board.pick_shoot_color(rng)
 		next_color = board.pick_shoot_color(rng)
 		refresh_hud()
+		queue_redraw()
 		return
 
 	if resolution["row_pushed"]:
@@ -458,19 +513,162 @@ func place_active_bubble(anchor_cell: Vector2i, hit_ceiling: bool, forced_snap: 
 	current_color = next_color
 	next_color = board.pick_shoot_color(rng)
 	refresh_hud()
+	queue_redraw()
 
 
-func spawn_resolution_effects(resolution: Dictionary) -> void:
+func build_resolution_burst_queue(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> Array[Dictionary]:
 	var burst_row_parity_offset: int = resolution["burst_row_parity_offset"]
-	for burst in resolution["cluster_bursts"]:
-		var cluster_cell: Vector2i = burst["cell"]
-		var cluster_color: int = burst["color"]
-		spawn_pop_burst(cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, burst_row_parity_offset), COLORS[cluster_color], 10, bubble_radius * 0.28)
+	var cluster_entries: Array[Dictionary] = build_cluster_burst_entries(resolution["cluster_bursts"], start_cell, origin, burst_row_parity_offset)
+	var floating_entries: Array[Dictionary] = build_floating_burst_entries(resolution["floating_bursts"], origin, burst_row_parity_offset)
+	var cluster_step: float = 0.05 if mobile_low_fx else 0.042
+	var floating_step: float = 0.07 if mobile_low_fx else 0.058
+	var cluster_particle_count: int = 4 if mobile_low_fx else 6
+	var floating_particle_count: int = 3 if mobile_low_fx else 5
 
-	for burst in resolution["floating_bursts"]:
-		var floating_cell: Vector2i = burst["cell"]
-		var floating_color: int = burst["color"]
-		spawn_pop_burst(cell_to_world_with_parity(floating_cell.x, floating_cell.y, burst_row_parity_offset), COLORS[floating_color].darkened(0.05), 8, bubble_radius * 0.22)
+	for cluster_entry in cluster_entries:
+		cluster_entry["particle_count"] = cluster_particle_count
+		cluster_entry["particle_scale"] = bubble_radius * 0.24
+		cluster_entry["duration"] = 0.24 if mobile_low_fx else 0.28
+		cluster_entry["glow"] = 1.5
+
+	for floating_entry in floating_entries:
+		floating_entry["particle_count"] = floating_particle_count
+		floating_entry["particle_scale"] = bubble_radius * 0.19
+		floating_entry["duration"] = 0.22 if mobile_low_fx else 0.26
+		floating_entry["glow"] = 1.22
+
+	var queued: Array[Dictionary] = []
+	for index in range(cluster_entries.size()):
+		var cluster_entry: Dictionary = cluster_entries[index]
+		cluster_entry["delay"] = float(index) * cluster_step
+		queued.append(cluster_entry)
+
+	var floating_start_delay: float = float(cluster_entries.size()) * cluster_step
+	if not floating_entries.is_empty():
+		floating_start_delay += 0.09 if mobile_low_fx else 0.07
+	for index in range(floating_entries.size()):
+		var floating_entry: Dictionary = floating_entries[index]
+		floating_entry["delay"] = floating_start_delay + float(index) * floating_step
+		queued.append(floating_entry)
+
+	return queued
+
+
+func build_cluster_burst_entries(cluster_bursts: Array, start_cell: Vector2i, origin: Vector2, parity_offset: int) -> Array[Dictionary]:
+	var burst_by_cell: Dictionary = {}
+	for burst in cluster_bursts:
+		burst_by_cell[burst["cell"]] = burst
+
+	var ordered_cells: Array[Vector2i] = []
+	var visited: Dictionary = {}
+	var frontier: Array[Vector2i] = []
+	if burst_by_cell.has(start_cell):
+		frontier.append(start_cell)
+		visited[start_cell] = true
+
+	while not frontier.is_empty():
+		var cell: Vector2i = frontier.pop_front()
+		ordered_cells.append(cell)
+		for neighbor in board.get_neighbors(cell.x, cell.y):
+			if not burst_by_cell.has(neighbor) or visited.has(neighbor):
+				continue
+			visited[neighbor] = true
+			frontier.append(neighbor)
+
+	if ordered_cells.size() < cluster_bursts.size():
+		var remaining_entries: Array[Dictionary] = []
+		for burst in cluster_bursts:
+			var cluster_cell: Vector2i = burst["cell"]
+			if visited.has(cluster_cell):
+				continue
+			var cluster_center: Vector2 = cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset)
+			remaining_entries.append({
+				"cell": cluster_cell,
+				"sort_key": cluster_center.distance_squared_to(origin),
+			})
+		remaining_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["sort_key"]) < float(b["sort_key"])
+		)
+		for entry in remaining_entries:
+			ordered_cells.append(entry["cell"])
+
+	var ordered_entries: Array[Dictionary] = []
+	for cluster_cell in ordered_cells:
+		var burst: Dictionary = burst_by_cell[cluster_cell]
+		var cluster_color: int = burst["color"]
+		ordered_entries.append({
+			"center": cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset),
+			"color": COLORS[cluster_color],
+			"burst_kind": "cluster",
+		})
+
+	return ordered_entries
+
+
+func build_floating_burst_entries(floating_bursts: Array, origin: Vector2, parity_offset: int) -> Array[Dictionary]:
+	var burst_by_cell: Dictionary = {}
+	for burst in floating_bursts:
+		burst_by_cell[burst["cell"]] = burst
+
+	var components: Array[Dictionary] = []
+	var visited: Dictionary = {}
+	for burst in floating_bursts:
+		var start_cell: Vector2i = burst["cell"]
+		if visited.has(start_cell):
+			continue
+		var component_cells: Array[Vector2i] = []
+		var frontier: Array[Vector2i] = [start_cell]
+		visited[start_cell] = true
+		while not frontier.is_empty():
+			var cell: Vector2i = frontier.pop_front()
+			component_cells.append(cell)
+			for neighbor in board.get_neighbors(cell.x, cell.y):
+				if not burst_by_cell.has(neighbor) or visited.has(neighbor):
+					continue
+				visited[neighbor] = true
+				frontier.append(neighbor)
+
+		var seed_cell: Vector2i = component_cells[0]
+		var seed_distance: float = cell_to_world_with_parity(seed_cell.x, seed_cell.y, parity_offset).distance_squared_to(origin)
+		for cell in component_cells:
+			var cell_distance: float = cell_to_world_with_parity(cell.x, cell.y, parity_offset).distance_squared_to(origin)
+			if cell_distance < seed_distance:
+				seed_cell = cell
+				seed_distance = cell_distance
+		components.append({
+			"seed_cell": seed_cell,
+			"seed_distance": seed_distance,
+			"cells": component_cells,
+		})
+
+	components.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["seed_distance"]) < float(b["seed_distance"])
+	)
+
+	var ordered_entries: Array[Dictionary] = []
+	for component in components:
+		var seed_cell: Vector2i = component["seed_cell"]
+		var component_cells: Array[Vector2i] = component["cells"]
+		var component_lookup: Dictionary = {}
+		for cell in component_cells:
+			component_lookup[cell] = true
+		var component_visited: Dictionary = {seed_cell: true}
+		var frontier: Array[Vector2i] = [seed_cell]
+		while not frontier.is_empty():
+			var cell: Vector2i = frontier.pop_front()
+			var burst: Dictionary = burst_by_cell[cell]
+			ordered_entries.append({
+				"center": cell_to_world_with_parity(cell.x, cell.y, parity_offset),
+				"color": COLORS[int(burst["color"])].darkened(0.05),
+				"burst_kind": "floating",
+			})
+			for neighbor in board.get_neighbors(cell.x, cell.y):
+				if not component_lookup.has(neighbor) or component_visited.has(neighbor):
+					continue
+				component_visited[neighbor] = true
+				frontier.append(neighbor)
+
+	return ordered_entries
 
 
 func check_loss_condition() -> bool:
@@ -491,6 +689,10 @@ func check_loss_condition() -> bool:
 func end_game(message: String) -> void:
 	state = STATE_GAME_OVER
 	active_bubble.clear()
+	pending_bursts.clear()
+	burst_bubbles.clear()
+	pending_resolution.clear()
+	sfx.play_game_over()
 	overlay.visible = true
 	overlay_title.text = "Game Over"
 	overlay_message.text = "%s\nFinal score: %d" % [message, board.score]
@@ -617,6 +819,7 @@ func kick_stack_drop(strength: float, gentle: bool) -> void:
 		else:
 			stack_settle_velocity = minf(stack_settle_velocity, -row_height * 0.78)
 			row_arrival_flash = 0.34
+			sfx.play_row_drop()
 		sync_shot_planner()
 		return
 
@@ -628,6 +831,7 @@ func kick_stack_drop(strength: float, gentle: bool) -> void:
 	else:
 		stack_settle_velocity = minf(stack_settle_velocity, -row_height * 1.2)
 		row_arrival_flash = 1.0
+		sfx.play_row_drop()
 		spawn_ceiling_entry_fx()
 	sync_shot_planner()
 
@@ -690,6 +894,79 @@ func update_hit_waves(delta: float) -> bool:
 		hit_waves.resize(write_index)
 
 	return not hit_waves.is_empty()
+
+
+func update_pending_bursts(delta: float) -> bool:
+	if pending_bursts.is_empty():
+		return false
+
+	var write_index: int = 0
+	for read_index in range(pending_bursts.size()):
+		var burst: Dictionary = pending_bursts[read_index]
+		var delay: float = burst["delay"] - delta
+		if delay <= 0.0:
+			activate_burst_bubble(burst)
+			continue
+		burst["delay"] = delay
+		pending_bursts[write_index] = burst
+		write_index += 1
+
+	if write_index != pending_bursts.size():
+		pending_bursts.resize(write_index)
+
+	return true
+
+
+func update_burst_bubbles(delta: float) -> bool:
+	if burst_bubbles.is_empty():
+		return false
+
+	var write_index: int = 0
+	for read_index in range(burst_bubbles.size()):
+		var burst: Dictionary = burst_bubbles[read_index]
+		var age: float = burst["age"] + delta
+		var duration: float = burst["duration"]
+		if age >= duration:
+			continue
+		burst["age"] = age
+		burst_bubbles[write_index] = burst
+		write_index += 1
+
+	if write_index != burst_bubbles.size():
+		burst_bubbles.resize(write_index)
+
+	return true
+
+
+func activate_burst_bubble(burst: Dictionary) -> void:
+	var center: Vector2 = burst["center"]
+	var bubble_color: Color = burst["color"]
+	var pop_power: float = 1.0 if burst["burst_kind"] == "cluster" else 0.82
+	trigger_pop_haptic()
+	if burst["burst_kind"] == "cluster":
+		sfx.play_match_pop()
+	else:
+		sfx.play_floating_drop()
+	spawn_pop_burst(center, bubble_color, burst["particle_count"], burst["particle_scale"])
+	burst_bubbles.append({
+		"center": center,
+		"color": bubble_color,
+		"burst_kind": burst["burst_kind"],
+		"age": 0.0,
+		"duration": burst["duration"],
+		"glow": burst["glow"],
+		"pop_power": pop_power,
+	})
+
+
+func trigger_pop_haptic() -> void:
+	if not mobile_low_fx:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now - last_pop_haptic_ms < 16:
+		return
+	last_pop_haptic_ms = now
+	Input.vibrate_handheld(16, 0.45)
 
 
 func spawn_hit_wave(origin: Vector2, strength: float) -> void:
@@ -982,6 +1259,8 @@ func draw_bubbles() -> void:
 			float(active_bubble["launch_age"])
 		)
 
+	draw_pending_burst_bubbles()
+
 
 func draw_particles() -> void:
 	for particle in pop_particles:
@@ -998,6 +1277,43 @@ func draw_particles() -> void:
 		if velocity.length_squared() > 2.0:
 			var trail_end: Vector2 = position - velocity.normalized() * size * 2.2
 			draw_line(position, trail_end, Color(faded.r, faded.g, faded.b, faded.a * 0.6), maxf(size * 0.9, 1.0))
+
+
+func draw_burst_bubbles() -> void:
+	for burst in burst_bubbles:
+		var age: float = burst["age"]
+		var duration: float = burst["duration"]
+		var progress: float = clampf(age / duration, 0.0, 1.0)
+		var center: Vector2 = burst["center"]
+		var bubble_color: Color = burst["color"]
+		var glow_strength: float = burst["glow"]
+		var pop_power: float = burst["pop_power"]
+		var flash_ratio: float = 1.0 - progress
+		var swell_phase: float = clampf(progress / 0.22, 0.0, 1.0)
+		var collapse_phase: float = clampf((progress - 0.14) / 0.86, 0.0, 1.0)
+		var swell: float = sin(swell_phase * PI * 0.5) * (0.22 * pop_power)
+		var collapse: float = pow(1.0 - collapse_phase, 0.52)
+		var radius: float = bubble_radius * (1.0 + swell) * collapse
+		var highlight_mix: float = 0.2 + flash_ratio * 0.28 + swell * 0.45
+		var highlight_color: Color = bubble_color.lerp(Color(1.0, 1.0, 1.0, 1.0), minf(highlight_mix, 0.72))
+		var shell_alpha: float = (0.16 + flash_ratio * 0.12 + swell * 0.22) * pop_power
+		draw_circle(center, bubble_radius * (1.1 + swell * 0.8), Color(highlight_color.r, highlight_color.g, highlight_color.b, shell_alpha * 0.48))
+		draw_bubble(center, highlight_color, maxf(radius, bubble_radius * 0.12), glow_strength + flash_ratio * (0.92 + pop_power * 0.2))
+		var flash_size: float = bubble_radius * (0.24 + swell * 0.7 + flash_ratio * 0.16)
+		draw_circle(center, flash_size, Color(1.0, 1.0, 1.0, (0.2 + swell * 0.24) * flash_ratio))
+		var ring_radius: float = bubble_radius * (0.28 + progress * (1.0 + pop_power * 0.35))
+		var ring_alpha: float = (0.22 + swell * 0.18) * flash_ratio
+		draw_arc(center, ring_radius, 0.0, TAU, 22, Color(1.0, 1.0, 1.0, ring_alpha), maxf(1.4, bubble_radius * (0.06 + flash_ratio * 0.03)), true)
+
+
+func draw_pending_burst_bubbles() -> void:
+	for burst in pending_bursts:
+		if burst["burst_kind"] == "cluster":
+			draw_bubble(burst["center"], burst["color"], bubble_radius, 1.08)
+			continue
+		var pending_color: Color = burst["color"]
+		pending_color.a = 0.52
+		draw_bubble(burst["center"] + Vector2(0.0, bubble_radius * 0.04), pending_color, bubble_radius * 0.96, 0.62)
 
 
 func draw_flying_bubble(center: Vector2, bubble_color: Color, direction: Vector2, launch_age: float) -> void:
