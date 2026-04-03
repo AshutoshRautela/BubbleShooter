@@ -1,0 +1,14 @@
+# Godot editor/cache output
+.godot/
+
+# Generated Android export project
+/android/
+
+# Local build/export artifacts
+/build/
+*.apk
+*.idsig
+*.log
+
+# OS/editor noise
+.DS_Store

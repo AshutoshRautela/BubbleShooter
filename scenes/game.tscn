@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game.gd" id="1"]
+
+[node name="Game" type="Node2D"]
+script = ExtResource("1")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="MarginContainer" parent="UI"]
+anchor_right = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 220.0
+
+[node name="Panel" type="PanelContainer" parent="UI/Hud"]
+
+[node name="VBox" type="VBoxContainer" parent="UI/Hud/Panel"]
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="UI/Hud/Panel/VBox"]
+text = "Bubble Shooter"
+horizontal_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="UI/Hud/Panel/VBox"]
+text = "Score: 0    Wave: 1"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="UI/Hud/Panel/VBox"]
+text = "Match 3 or more bubbles."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="FpsLabel" type="Label" parent="UI/Hud/Panel/VBox"]
+text = "FPS: 0   Frame: 0.0 ms"
+horizontal_alignment = 1
+
+[node name="RestartButton" type="Button" parent="UI/Hud/Panel/VBox"]
+text = "Restart"
+
+[node name="Overlay" type="CenterContainer" parent="UI"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Panel" type="PanelContainer" parent="UI/Overlay"]
+
+[node name="VBox" type="VBoxContainer" parent="UI/Overlay/Panel"]
+theme_override_constants/separation = 10
+
+[node name="OverlayTitle" type="Label" parent="UI/Overlay/Panel/VBox"]
+text = "Game Over"
+horizontal_alignment = 1
+
+[node name="OverlayMessage" type="Label" parent="UI/Overlay/Panel/VBox"]
+text = "Final score: 0"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="OverlayButton" type="Button" parent="UI/Overlay/Panel/VBox"]
+text = "Play Again"
