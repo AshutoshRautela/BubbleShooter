@@ -1,6 +1,12 @@
 # Architecture Notes
 
-This project is intentionally small. Nearly all gameplay and rendering logic lives in `scripts/game.gd`, attached to `scenes/game.tscn`.
+This project is intentionally small, but it is no longer a single-script monolith. The scene controller lives in `scripts/game.gd`, while gameplay rules and shot planning are split into dedicated helper scripts.
+
+## Main Modules
+
+- `scripts/game.gd`: scene orchestration, input, HUD, particles, hit waves, and custom drawing
+- `scripts/board_state.gd`: board data, match resolution, floating-bubble cleanup, scoring, wave progression, and row drops
+- `scripts/shot_planner.gd`: aim assist, wall-bounce path simulation, and snap targeting
 
 ## Core State
 
@@ -20,17 +26,17 @@ The board is not a square grid. It uses staggered rows so each bubble has up to 
 ## Shot Lifecycle
 
 1. `fire_bubble()` clamps the aim direction and applies a small aim assist.
-2. `simulate_shot_path()` traces the future path, including wall bounces.
+2. `BubbleShotPlanner.simulate_shot_path()` traces the future path, including wall bounces.
 3. `update_active_bubble()` moves the in-flight bubble along the precomputed path.
-4. `place_active_bubble()` snaps the shot into the board and resolves the result.
+4. `place_active_bubble()` snaps the shot into the board and hands resolution to `BubbleBoardState`.
 
 This pre-simulated approach keeps the guide path and the actual shot behavior aligned.
 
 ## Match Resolution
 
-- `collect_cluster()` performs a flood-fill for same-color neighbors.
-- `pop_cluster_from()` removes clusters of size 3 or more.
-- `remove_floating_bubbles()` performs a top-connected search and clears unsupported bubbles.
+- `BubbleBoardState.collect_cluster()` performs a flood-fill for same-color neighbors.
+- `BubbleBoardState.pop_cluster_from()` removes clusters of size 3 or more.
+- `BubbleBoardState.remove_floating_bubbles()` performs a top-connected search and clears unsupported bubbles.
 
 The floating-bubble cleanup is what creates the classic “hanging group falls after support is removed” behavior.
 
@@ -38,9 +44,9 @@ The floating-bubble cleanup is what creates the classic “hanging group falls a
 
 - The board starts with `START_ROWS` rows.
 - Every non-clearing shot decreases `shots_until_shift`.
-- When the counter reaches zero, `push_row_from_ceiling()` inserts a fresh row at the top.
+- When the counter reaches zero, `BubbleBoardState.push_row_from_ceiling()` inserts a fresh row at the top.
 - `check_loss_condition()` ends the game once the stack crosses the warning line.
-- If the board is fully cleared, `spawn_wave()` starts the next wave with the current difficulty palette.
+- If the board is fully cleared, `BubbleBoardState` spawns the next wave with the current difficulty palette.
 
 ## Rendering Strategy
 

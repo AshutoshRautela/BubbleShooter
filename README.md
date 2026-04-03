@@ -1,6 +1,6 @@
 # Bubble Shooter
 
-A compact Bubble Shooter game built with Godot 4.6 for portrait mobile play. The project currently lives in a single gameplay scene and a single script, which makes the rules and rendering pipeline easy to inspect before the first public commit.
+A compact Bubble Shooter game built with Godot 4.6 for portrait mobile play. The project uses a small module split so gameplay rules, shot planning, and rendering responsibilities stay easier to maintain.
 
 ## Highlights
 
@@ -30,8 +30,10 @@ A compact Bubble Shooter game built with Godot 4.6 for portrait mobile play. The
 ## Project Structure
 
 - `project.godot`: project configuration and main scene entrypoint
-- `scenes/game.tscn`: single gameplay scene and UI layout
-- `scripts/game.gd`: gameplay state, shot simulation, matching, scoring, and custom drawing
+- `scenes/game.tscn`: gameplay scene and UI layout
+- `scripts/game.gd`: scene controller, input handling, HUD updates, and custom rendering
+- `scripts/board_state.gd`: board rules, matching, floating-bubble cleanup, scoring, and wave progression
+- `scripts/shot_planner.gd`: aim assist, wall-bounce path simulation, and snap targeting
 - `export_presets.cfg`: Android export preset
 
 ## Running The Project
@@ -51,6 +53,6 @@ The repository includes an Android export preset that writes the APK to `build/B
 - The board uses a staggered 9-column grid to emulate classic bubble-shooter adjacency.
 - Shot placement is pre-simulated so aiming, wall bounces, and snapping stay deterministic.
 - New shots are restricted to colors currently present on the board, which keeps the game solvable and reduces dead draws.
-- Rendering is code-driven in `scripts/game.gd`, including the board, particles, launcher, and HUD effects.
+- Rendering is code-driven in `scripts/game.gd`, while rules and shot planning are split into helper scripts.
 
 More detailed gameplay internals are documented in `docs/ARCHITECTURE.md`.
