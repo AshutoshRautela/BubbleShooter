@@ -1,10 +1,11 @@
 extends Node2D
 
+const BubbleBoardState = preload("res://scripts/board_state.gd")
+const BubbleShotPlanner = preload("res://scripts/shot_planner.gd")
+
 const GRID_COLUMNS := 9
 const START_ROWS := 6
 const SHOTS_PER_SHIFT := 5
-const FIRE_ASSIST_MAX_ANGLE := 0.028
-const FIRE_ASSIST_STEP_ANGLE := 0.007
 const SHOT_SPEED_BURST_MULTIPLIER := 2.7
 const SHOT_SPEED_FINISH_MULTIPLIER := 1.15
 const MAX_HIT_WAVES := 6
@@ -36,7 +37,9 @@ const COLORS := [
 @onready var overlay_button: Button = $UI/Overlay/Panel/VBox/OverlayButton
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-var grid: Array[Array] = []
+var board: BubbleBoardState = BubbleBoardState.new(GRID_COLUMNS, START_ROWS, SHOTS_PER_SHIFT, COLORS.size())
+var shot_planner: BubbleShotPlanner = BubbleShotPlanner.new()
+var grid: Array[Array] = board.grid
 var active_bubble: Dictionary = {}
 var pop_particles: Array[Dictionary] = []
 var hit_waves: Array[Dictionary] = []
@@ -44,11 +47,6 @@ var ambient_stars: Array[Dictionary] = []
 
 var aim_target: Vector2 = Vector2.ZERO
 var state: String = STATE_AIMING
-var status_message: String = ""
-
-var score: int = 0
-var wave: int = 1
-var shots_until_shift: int = SHOTS_PER_SHIFT
 var current_color: int = 0
 var next_color: int = 0
 
@@ -64,7 +62,6 @@ var cannon_position: Vector2 = Vector2.ZERO
 var shot_speed: float = 980.0
 var max_rows_visible: int = 12
 var visual_time: float = 0.0
-var row_parity_offset: int = 0
 var stack_visual_offset: float = 0.0
 var stack_settle_velocity: float = 0.0
 var row_arrival_flash: float = 0.0
@@ -288,7 +285,23 @@ func update_layout() -> void:
 	if aim_target == Vector2.ZERO:
 		aim_target = cannon_position + Vector2.UP * 320.0
 	generate_ambient_stars()
+	sync_shot_planner()
 	queue_redraw()
+
+
+func sync_shot_planner() -> void:
+	shot_planner.sync_layout(board, {
+		"board_left": board_left,
+		"board_right": board_right,
+		"board_top": board_top,
+		"bubble_radius": bubble_radius,
+		"bubble_diameter": bubble_diameter,
+		"row_height": row_height,
+		"max_rows_visible": max_rows_visible,
+		"start_rows": START_ROWS,
+		"cannon_position": cannon_position,
+		"stack_visual_offset": stack_visual_offset,
+	})
 
 
 func generate_ambient_stars() -> void:
@@ -309,10 +322,7 @@ func generate_ambient_stars() -> void:
 
 
 func start_new_game() -> void:
-	score = 0
-	wave = 1
-	shots_until_shift = SHOTS_PER_SHIFT
-	row_parity_offset = 0
+	board.start_new_game(rng)
 	active_bubble.clear()
 	pop_particles.clear()
 	hit_waves.clear()
@@ -321,25 +331,9 @@ func start_new_game() -> void:
 	row_arrival_flash = 0.0
 	overlay.visible = false
 	state = STATE_AIMING
-	spawn_wave()
-
-
-func spawn_wave() -> void:
-	grid.clear()
-	row_parity_offset = 0
-	var palette_size: int = current_palette_size()
-	for row in range(START_ROWS):
-		var cells: Array[int] = []
-		for col in range(GRID_COLUMNS):
-			if row > 1 and rng.randf() < 0.1:
-				cells.append(-1)
-			else:
-				cells.append(rng.randi_range(0, palette_size - 1))
-		grid.append(cells)
-	current_color = pick_shoot_color()
-	next_color = pick_shoot_color()
 	kick_stack_drop(row_height * 0.58, true)
-	status_message = "Aim with mouse or touch. Match 3 or more bubbles."
+	current_color = board.pick_shoot_color(rng)
+	next_color = board.pick_shoot_color(rng)
 	refresh_hud()
 	queue_redraw()
 
@@ -347,8 +341,9 @@ func spawn_wave() -> void:
 func fire_bubble() -> void:
 	if state != STATE_AIMING:
 		return
-	var direction: Vector2 = apply_fire_assist(clamped_aim_direction())
-	var shot_plan: Dictionary = simulate_shot_path(direction)
+	sync_shot_planner()
+	var direction: Vector2 = shot_planner.apply_fire_assist(clamped_aim_direction())
+	var shot_plan: Dictionary = shot_planner.simulate_shot_path(direction)
 	var impact_type: String = shot_plan["impact_type"]
 	var path_points: Array[Vector2] = shot_plan["points"]
 	var bounce_indices: Array[int] = shot_plan["bounce_indices"]
@@ -365,7 +360,7 @@ func fire_bubble() -> void:
 		"impact_type": impact_type,
 		"impact_position": shot_plan["impact_position"],
 		"travel_distance": 0.0,
-		"travel_total_distance": path_total_length(path_points),
+		"travel_total_distance": shot_planner.path_total_length(path_points),
 		"launch_age": 0.0,
 	}
 	state = STATE_FLYING
@@ -431,146 +426,55 @@ func spawn_bounce_spark(position: Vector2) -> void:
 func place_active_bubble(anchor_cell: Vector2i, hit_ceiling: bool, forced_snap: Vector2i = Vector2i(-1, -1)) -> void:
 	var snap: Vector2i = forced_snap
 	if snap == Vector2i(-1, -1):
-		snap = find_best_snap_cell(active_bubble["position"], anchor_cell, hit_ceiling)
-	ensure_row(snap.x)
-	grid[snap.x][snap.y] = active_bubble["color"]
-	var impact_position: Vector2 = active_bubble["impact_position"]
+		sync_shot_planner()
+		snap = shot_planner.find_best_snap_cell(active_bubble["position"], anchor_cell, hit_ceiling)
 	var impact_type: String = active_bubble["impact_type"]
 	var snap_center: Vector2 = cell_to_world(snap.x, snap.y)
 	spawn_pop_burst(cell_to_world(snap.x, snap.y), COLORS[int(active_bubble["color"])].lightened(0.18), 5, bubble_radius * 0.16)
 	if impact_type == "stack":
 		spawn_hit_wave(snap_center, 1.25)
 		spawn_stack_impact_sparks(snap_center, COLORS[int(active_bubble["color"])])
+	var resolution: Dictionary = board.resolve_placed_bubble(snap, int(active_bubble["color"]), rng)
+	spawn_resolution_effects(resolution)
 	active_bubble.clear()
 	state = STATE_AIMING
 
-	var removed: int = pop_cluster_from(snap)
-	compact_grid()
-	if removed == 0:
-		score += 5
-		status_message = "No match. New row in %d shots." % [maxi(shots_until_shift - 1, 0)]
-
-	if count_bubbles() == 0:
-		score += 150
-		wave += 1
-		shots_until_shift = SHOTS_PER_SHIFT
-		spawn_wave()
-		status_message = "Board cleared. Wave %d begins." % wave
+	if resolution["board_cleared"]:
+		kick_stack_drop(row_height * 0.58, true)
+		current_color = board.pick_shoot_color(rng)
+		next_color = board.pick_shoot_color(rng)
 		refresh_hud()
 		return
 
-	shots_until_shift -= 1
-	if shots_until_shift <= 0:
-		push_row_from_ceiling()
-		shots_until_shift = SHOTS_PER_SHIFT
+	if resolution["row_pushed"]:
+		kick_stack_drop(row_height * 0.92, false)
 
 	if check_loss_condition():
 		return
 
 	current_color = next_color
-	next_color = pick_shoot_color()
+	next_color = board.pick_shoot_color(rng)
 	refresh_hud()
 
 
-func pop_cluster_from(start: Vector2i) -> int:
-	var bubble_color: int = grid[start.x][start.y]
-	var cluster: Array[Vector2i] = collect_cluster(start, bubble_color)
-	if cluster.size() < 3:
-		return 0
+func spawn_resolution_effects(resolution: Dictionary) -> void:
+	var burst_row_parity_offset: int = resolution["burst_row_parity_offset"]
+	for burst in resolution["cluster_bursts"]:
+		var cluster_cell: Vector2i = burst["cell"]
+		var cluster_color: int = burst["color"]
+		spawn_pop_burst(cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, burst_row_parity_offset), COLORS[cluster_color], 10, bubble_radius * 0.28)
 
-	for cell in cluster:
-		spawn_pop_burst(cell_to_world(cell.x, cell.y), COLORS[bubble_color], 10, bubble_radius * 0.28)
-		grid[cell.x][cell.y] = -1
-
-	var floating_removed: int = remove_floating_bubbles()
-	var total_removed: int = cluster.size() + floating_removed
-	score += cluster.size() * 20 + floating_removed * 25
-	status_message = "Popped %d bubbles." % total_removed
-	return total_removed
-
-
-func remove_floating_bubbles() -> int:
-	var attached: Dictionary = {}
-	var frontier: Array[Vector2i] = []
-
-	if grid.is_empty():
-		return 0
-
-	for col in range(GRID_COLUMNS):
-		if cell_occupied(0, col):
-			var top_cell: Vector2i = Vector2i(0, col)
-			attached[top_cell] = true
-			frontier.append(top_cell)
-
-	while not frontier.is_empty():
-		var cell: Vector2i = frontier.pop_back()
-		for neighbor in get_neighbors(cell.x, cell.y):
-			if not cell_occupied(neighbor.x, neighbor.y):
-				continue
-			if attached.has(neighbor):
-				continue
-			attached[neighbor] = true
-			frontier.append(neighbor)
-
-	var removed: int = 0
-	for row in range(grid.size()):
-		for col in range(GRID_COLUMNS):
-			var cell: Vector2i = Vector2i(row, col)
-			if grid[row][col] != -1 and not attached.has(cell):
-				spawn_pop_burst(cell_to_world(row, col), COLORS[int(grid[row][col])].darkened(0.05), 8, bubble_radius * 0.22)
-				grid[row][col] = -1
-				removed += 1
-
-	if removed > 0:
-		compact_grid()
-
-	return removed
-
-
-func collect_cluster(start: Vector2i, bubble_color: int) -> Array[Vector2i]:
-	var cluster: Array[Vector2i] = []
-	var frontier: Array[Vector2i] = [start]
-	var seen: Dictionary = {start: true}
-
-	while not frontier.is_empty():
-		var cell: Vector2i = frontier.pop_back()
-		cluster.append(cell)
-		for neighbor in get_neighbors(cell.x, cell.y):
-			if not cell_occupied(neighbor.x, neighbor.y):
-				continue
-			if grid[neighbor.x][neighbor.y] != bubble_color:
-				continue
-			if seen.has(neighbor):
-				continue
-			seen[neighbor] = true
-			frontier.append(neighbor)
-
-	return cluster
-
-
-func push_row_from_ceiling() -> void:
-	var options: Array[int] = available_grid_colors()
-	if options.is_empty():
-		options = [0]
-
-	var new_row: Array[int] = []
-	for col in range(GRID_COLUMNS):
-		if col > 0 and col < GRID_COLUMNS - 1 and rng.randf() < 0.08:
-			new_row.append(-1)
-		else:
-			new_row.append(options[rng.randi_range(0, options.size() - 1)])
-	grid.insert(0, new_row)
-	row_parity_offset = (row_parity_offset + 1) % 2
-	kick_stack_drop(row_height * 0.92, false)
-	status_message = "Ceiling dropped one row."
-	refresh_hud()
+	for burst in resolution["floating_bursts"]:
+		var floating_cell: Vector2i = burst["cell"]
+		var floating_color: int = burst["color"]
+		spawn_pop_burst(cell_to_world_with_parity(floating_cell.x, floating_cell.y, burst_row_parity_offset), COLORS[floating_color].darkened(0.05), 8, bubble_radius * 0.22)
 
 
 func check_loss_condition() -> bool:
 	var deepest_y: float = board_top
 	for row in range(grid.size()):
 		for col in range(GRID_COLUMNS):
-			if grid[row][col] == -1:
+			if grid[row][col] == BubbleBoardState.EMPTY_CELL:
 				continue
 			deepest_y = maxf(deepest_y, cell_to_logic_world(row, col).y)
 
@@ -586,270 +490,41 @@ func end_game(message: String) -> void:
 	active_bubble.clear()
 	overlay.visible = true
 	overlay_title.text = "Game Over"
-	overlay_message.text = "%s\nFinal score: %d" % [message, score]
-	status_message = message
+	overlay_message.text = "%s\nFinal score: %d" % [message, board.score]
+	board.status_message = message
 	refresh_hud()
 	queue_redraw()
 
 
 func refresh_hud() -> void:
-	score_label.text = "Score: %d    Wave: %d" % [score, wave]
-	status_label.text = "%s  Row in %d shots." % [status_message, shots_until_shift]
-
-
-func current_palette_size() -> int:
-	return clampi(4 + int((wave - 1) / 2), 4, COLORS.size())
-
-
-func pick_shoot_color() -> int:
-	var options: Array[int] = available_grid_colors()
-	if options.is_empty():
-		options = [0, 1, 2, 3]
-	return options[rng.randi_range(0, options.size() - 1)]
-
-
-func available_grid_colors() -> Array[int]:
-	var found: Dictionary = {}
-	for row in range(grid.size()):
-		for col in range(GRID_COLUMNS):
-			var bubble_color: int = grid[row][col]
-			if bubble_color != -1:
-				found[bubble_color] = true
-
-	var options: Array[int] = []
-	for key in found.keys():
-		options.append(int(key))
-	options.sort()
-
-	if options.is_empty():
-		for color_index in range(current_palette_size()):
-			options.append(color_index)
-
-	return options
+	score_label.text = "Score: %d    Wave: %d" % [board.score, board.wave]
+	status_label.text = "%s  Row in %d shots." % [board.status_message, board.shots_until_shift]
 
 
 func row_shift_parity(row: int) -> int:
-	return (row + row_parity_offset) % 2
+	return board.row_shift_parity(row)
 
 
-func find_first_path_event(start_position: Vector2, end_position: Vector2) -> Dictionary:
-	var best_event: Dictionary = {}
-	var best_t: float = 2.0
-	var movement: Vector2 = end_position - start_position
-
-	if absf(movement.x) > 0.0001:
-		var left_x: float = board_left + bubble_radius
-		var right_x: float = board_right - bubble_radius
-		var wall_t: float = -1.0
-		var wall_side: String = ""
-		if movement.x < 0.0 and end_position.x <= left_x:
-			wall_t = (left_x - start_position.x) / movement.x
-			wall_side = "left"
-		elif movement.x > 0.0 and end_position.x >= right_x:
-			wall_t = (right_x - start_position.x) / movement.x
-			wall_side = "right"
-
-		if wall_t >= 0.0 and wall_t <= 1.0 and wall_t < best_t:
-			best_t = wall_t
-			best_event = {
-				"type": "wall",
-				"side": wall_side,
-				"t": wall_t,
-				"position": start_position.lerp(end_position, wall_t),
-			}
-
-	if movement.y < -0.0001:
-		var ceiling_y: float = board_top + bubble_radius
-		if end_position.y <= ceiling_y:
-			var ceiling_t: float = (ceiling_y - start_position.y) / movement.y
-			if ceiling_t >= 0.0 and ceiling_t <= 1.0 and ceiling_t < best_t:
-				best_t = ceiling_t
-				best_event = {
-					"type": "ceiling",
-					"t": ceiling_t,
-					"position": start_position.lerp(end_position, ceiling_t),
-				}
-
-	var collision_radius: float = bubble_diameter - 2.0
-	for row in range(grid.size()):
-		for col in range(GRID_COLUMNS):
-			if grid[row][col] == -1:
-				continue
-			var candidate_cell: Vector2i = Vector2i(row, col)
-			var target_center: Vector2 = cell_to_world(row, col)
-			var hit_t: float = segment_circle_hit_t(start_position, end_position, target_center, collision_radius)
-			if hit_t >= 0.0 and hit_t < best_t:
-				best_t = hit_t
-				best_event = {
-					"type": "stack",
-					"t": hit_t,
-					"position": start_position.lerp(end_position, hit_t),
-					"cell": candidate_cell,
-				}
-
-	return best_event
+func cell_occupied(row: int, col: int) -> bool:
+	return board.cell_occupied(row, col)
 
 
-func segment_circle_hit_t(start_position: Vector2, end_position: Vector2, center: Vector2, radius: float) -> float:
-	var direction: Vector2 = end_position - start_position
-	var a: float = direction.dot(direction)
-	if a <= 0.000001:
-		return -1.0
-
-	var offset: Vector2 = start_position - center
-	var b: float = 2.0 * offset.dot(direction)
-	var c: float = offset.dot(offset) - radius * radius
-	var discriminant: float = b * b - 4.0 * a * c
-	if discriminant < 0.0:
-		return -1.0
-
-	var sqrt_discriminant: float = sqrt(discriminant)
-	var t1: float = (-b - sqrt_discriminant) / (2.0 * a)
-	var t2: float = (-b + sqrt_discriminant) / (2.0 * a)
-	if t1 >= 0.0 and t1 <= 1.0:
-		return t1
-	if t2 >= 0.0 and t2 <= 1.0:
-		return t2
-	return -1.0
+func cell_to_world(row: int, col: int) -> Vector2:
+	return cell_to_world_with_parity(row, col, board.row_parity_offset)
 
 
-func apply_fire_assist(direction: Vector2) -> Vector2:
-	var best_direction: Vector2 = direction
-	var best_score: float = INF
-	var angle_offsets: Array[float] = [
-		0.0,
-		-FIRE_ASSIST_STEP_ANGLE,
-		FIRE_ASSIST_STEP_ANGLE,
-		-FIRE_ASSIST_STEP_ANGLE * 2.0,
-		FIRE_ASSIST_STEP_ANGLE * 2.0,
-		-FIRE_ASSIST_STEP_ANGLE * 3.0,
-		FIRE_ASSIST_STEP_ANGLE * 3.0,
-		-FIRE_ASSIST_STEP_ANGLE * 4.0,
-		FIRE_ASSIST_STEP_ANGLE * 4.0,
-	]
-
-	for angle_offset in angle_offsets:
-		if absf(angle_offset) > FIRE_ASSIST_MAX_ANGLE:
-			continue
-		var candidate_direction: Vector2 = direction.rotated(angle_offset).normalized()
-		var shot_result: Dictionary = simulate_shot_path(candidate_direction)
-		var impact_type: String = shot_result["impact_type"]
-		if impact_type == "none":
-			continue
-
-		var score: float = absf(angle_offset) * bubble_radius * 14.0
-		if impact_type == "stack":
-			var impact_position: Vector2 = shot_result["impact_position"]
-			var snap_cell: Vector2i = shot_result["snap_cell"]
-			var snap_center: Vector2 = cell_to_world(snap_cell.x, snap_cell.y)
-			score += snap_center.distance_to(impact_position) * 4.5
-		else:
-			score += 4.0
-
-		if score < best_score:
-			best_score = score
-			best_direction = candidate_direction
-
-	return best_direction
+func cell_to_world_with_parity(row: int, col: int, parity_offset: int) -> Vector2:
+	return Vector2(
+		board_left + bubble_radius + float(col) * bubble_diameter + float((row + parity_offset) % 2) * bubble_radius,
+		board_top + bubble_radius + float(row) * row_height + stack_visual_offset
+	)
 
 
-func simulate_shot_path(direction: Vector2) -> Dictionary:
-	var bounce_sides: Array[String] = []
-	var point: Vector2 = cannon_position
-	var simulated_velocity: Vector2 = direction * bubble_radius * 1.7
-
-	for _index in range(36):
-		var next_point: Vector2 = point + simulated_velocity
-		var event: Dictionary = find_first_path_event(point, next_point)
-		if event.is_empty():
-			point = next_point
-			continue
-
-		var event_type: String = event["type"]
-		if event_type == "wall":
-			point = event["position"]
-			var wall_side: String = event["side"]
-			bounce_sides.append(wall_side)
-			if wall_side == "left":
-				simulated_velocity.x = abs(simulated_velocity.x)
-			else:
-				simulated_velocity.x = -abs(simulated_velocity.x)
-			point += simulated_velocity.normalized() * 0.2
-			continue
-		if event_type == "ceiling":
-			var impact_position: Vector2 = event["position"]
-			var ceiling_snap: Vector2i = find_best_snap_cell(impact_position, Vector2i(-1, -1), true)
-			var points: Array[Vector2] = build_exact_path_to_target(cell_to_world(ceiling_snap.x, ceiling_snap.y), bounce_sides)
-			return {
-				"impact_type": "ceiling",
-				"impact_position": impact_position,
-				"snap_cell": ceiling_snap,
-				"points": points,
-				"bounce_indices": build_bounce_indices(bounce_sides.size()),
-			}
-		if event_type == "stack":
-			var impact_position: Vector2 = event["position"]
-			var hit_cell: Vector2i = event["cell"]
-			var snap_cell: Vector2i = find_best_snap_cell(impact_position, hit_cell, false)
-			var points: Array[Vector2] = build_exact_path_to_target(cell_to_world(snap_cell.x, snap_cell.y), bounce_sides)
-			return {
-				"impact_type": "stack",
-				"impact_position": impact_position,
-				"snap_cell": snap_cell,
-				"cell": hit_cell,
-				"points": points,
-				"bounce_indices": build_bounce_indices(bounce_sides.size()),
-			}
-
-	var fallback_points: Array[Vector2] = [cannon_position, point]
-	return {
-		"impact_type": "none",
-		"impact_position": point,
-		"points": fallback_points,
-		"bounce_indices": build_bounce_indices(bounce_sides.size()),
-		"snap_cell": Vector2i(-1, -1),
-	}
-
-
-func build_exact_path_to_target(target_position: Vector2, bounce_sides: Array[String]) -> Array[Vector2]:
-	var left_x: float = board_left + bubble_radius
-	var right_x: float = board_right - bubble_radius
-	var virtual_target: Vector2 = target_position
-
-	for index in range(bounce_sides.size() - 1, -1, -1):
-		if bounce_sides[index] == "left":
-			virtual_target.x = left_x - (virtual_target.x - left_x)
-		else:
-			virtual_target.x = right_x + (right_x - virtual_target.x)
-
-	var points: Array[Vector2] = [cannon_position]
-	var line_start: Vector2 = cannon_position
-	for side in bounce_sides:
-		var wall_x: float = left_x if side == "left" else right_x
-		var delta_x: float = virtual_target.x - line_start.x
-		if absf(delta_x) <= 0.0001:
-			break
-		var t: float = (wall_x - line_start.x) / delta_x
-		var bounce_point: Vector2 = line_start.lerp(virtual_target, t)
-		points.append(bounce_point)
-		line_start = bounce_point
-
-	points.append(target_position)
-	return points
-
-
-func build_bounce_indices(count: int) -> Array[int]:
-	var indices: Array[int] = []
-	for index in range(count):
-		indices.append(index + 1)
-	return indices
-
-
-func path_total_length(points: Array[Vector2]) -> float:
-	var total: float = 0.0
-	for index in range(points.size() - 1):
-		total += points[index].distance_to(points[index + 1])
-	return total
+func cell_to_logic_world(row: int, col: int) -> Vector2:
+	return Vector2(
+		board_left + bubble_radius + float(col) * bubble_diameter + float(row_shift_parity(row)) * bubble_radius,
+		board_top + bubble_radius + float(row) * row_height
+	)
 
 
 func shot_speed_multiplier(progress: float) -> float:
@@ -883,174 +558,6 @@ func aim_pullback_distance() -> float:
 	return bubble_radius * (0.18 + pull_ratio * 0.62)
 
 
-func find_best_snap_cell(position: Vector2, anchor_cell: Vector2i, hit_ceiling: bool) -> Vector2i:
-	if hit_ceiling:
-		return find_top_snap_cell(position)
-
-	if anchor_cell != Vector2i(-1, -1):
-		var anchored_snap: Vector2i = find_neighbor_snap_cell(position, anchor_cell)
-		if anchored_snap != Vector2i(-1, -1):
-			return anchored_snap
-
-	var best: Vector2i = Vector2i(-1, -1)
-	var best_distance: float = INF
-	var scan_rows: int = mini(max_rows_visible + 2, maxi(grid.size() + 2, START_ROWS + 3))
-
-	for row in range(scan_rows):
-		for col in range(GRID_COLUMNS):
-			if cell_occupied(row, col):
-				continue
-			if row != 0 and not has_occupied_neighbor(row, col):
-				continue
-			var distance: float = cell_to_world(row, col).distance_to(position)
-			if distance < best_distance:
-				best_distance = distance
-				best = Vector2i(row, col)
-
-	if best == Vector2i(-1, -1):
-		best = find_top_snap_cell(position)
-
-	return best
-
-
-func find_top_snap_cell(position: Vector2) -> Vector2i:
-	var row_start_x: float = board_left + bubble_radius + float(row_shift_parity(0)) * bubble_radius
-	var guessed_col: int = clampi(int(round((position.x - row_start_x) / bubble_diameter)), 0, GRID_COLUMNS - 1)
-	if not cell_occupied(0, guessed_col):
-		return Vector2i(0, guessed_col)
-
-	var best: Vector2i = Vector2i(-1, -1)
-	var best_distance: float = INF
-	for col in range(GRID_COLUMNS):
-		if cell_occupied(0, col):
-			continue
-		var cell: Vector2i = Vector2i(0, col)
-		var distance: float = cell_to_world(cell.x, cell.y).distance_to(position)
-		if distance < best_distance:
-			best_distance = distance
-			best = cell
-
-	if best != Vector2i(-1, -1):
-		return best
-
-	return Vector2i(0, guessed_col)
-
-
-func find_neighbor_snap_cell(position: Vector2, anchor_cell: Vector2i) -> Vector2i:
-	var anchor_center: Vector2 = cell_to_world(anchor_cell.x, anchor_cell.y)
-	var outward: Vector2 = position - anchor_center
-	if outward.length_squared() < 0.0001:
-		outward = Vector2.UP
-	else:
-		outward = outward.normalized()
-
-	var best: Vector2i = Vector2i(-1, -1)
-	var best_score: float = INF
-	for neighbor in get_neighbors(anchor_cell.x, anchor_cell.y):
-		if cell_occupied(neighbor.x, neighbor.y):
-			continue
-		var candidate_center: Vector2 = cell_to_world(neighbor.x, neighbor.y)
-		var distance_score: float = candidate_center.distance_to(position)
-		var alignment_bias: float = (1.0 - maxf(-1.0, minf(1.0, outward.dot((candidate_center - anchor_center).normalized())))) * bubble_radius * 0.45
-		var score: float = distance_score + alignment_bias
-		if score < best_score:
-			best_score = score
-			best = neighbor
-
-	return best
-
-
-func has_occupied_neighbor(row: int, col: int) -> bool:
-	for neighbor in get_neighbors(row, col):
-		if cell_occupied(neighbor.x, neighbor.y):
-			return true
-	return false
-
-
-func get_neighbors(row: int, col: int) -> Array[Vector2i]:
-	var deltas: Array[Vector2i] = []
-	if row_shift_parity(row) == 0:
-		deltas = [
-			Vector2i(0, -1),
-			Vector2i(0, 1),
-			Vector2i(-1, -1),
-			Vector2i(-1, 0),
-			Vector2i(1, -1),
-			Vector2i(1, 0),
-		]
-	else:
-		deltas = [
-			Vector2i(0, -1),
-			Vector2i(0, 1),
-			Vector2i(-1, 0),
-			Vector2i(-1, 1),
-			Vector2i(1, 0),
-			Vector2i(1, 1),
-		]
-
-	var neighbors: Array[Vector2i] = []
-	for delta in deltas:
-		var next_row: int = row + delta.x
-		var next_col: int = col + delta.y
-		if next_col < 0 or next_col >= GRID_COLUMNS or next_row < 0:
-			continue
-		neighbors.append(Vector2i(next_row, next_col))
-
-	return neighbors
-
-
-func ensure_row(row: int) -> void:
-	while grid.size() <= row:
-		grid.append(make_empty_row())
-
-
-func compact_grid() -> void:
-	while not grid.is_empty():
-		var keep_row: bool = false
-		var last_row: Array = grid[grid.size() - 1]
-		for col in range(GRID_COLUMNS):
-			if int(last_row[col]) != -1:
-				keep_row = true
-				break
-		if keep_row:
-			break
-		grid.remove_at(grid.size() - 1)
-
-
-func make_empty_row() -> Array[int]:
-	var row: Array[int] = []
-	for col in range(GRID_COLUMNS):
-		row.append(-1)
-	return row
-
-
-func cell_occupied(row: int, col: int) -> bool:
-	return row >= 0 and row < grid.size() and col >= 0 and col < GRID_COLUMNS and grid[row][col] != -1
-
-
-func count_bubbles() -> int:
-	var count: int = 0
-	for row in range(grid.size()):
-		for col in range(GRID_COLUMNS):
-			if grid[row][col] != -1:
-				count += 1
-	return count
-
-
-func cell_to_world(row: int, col: int) -> Vector2:
-	return Vector2(
-		board_left + bubble_radius + float(col) * bubble_diameter + float(row_shift_parity(row)) * bubble_radius,
-		board_top + bubble_radius + float(row) * row_height + stack_visual_offset
-	)
-
-
-func cell_to_logic_world(row: int, col: int) -> Vector2:
-	return Vector2(
-		board_left + bubble_radius + float(col) * bubble_diameter + float(row_shift_parity(row)) * bubble_radius,
-		board_top + bubble_radius + float(row) * row_height
-	)
-
-
 func clamped_aim_direction() -> Vector2:
 	var direction: Vector2 = aim_target - cannon_position
 	if direction.length_squared() < 0.0001:
@@ -1059,26 +566,16 @@ func clamped_aim_direction() -> Vector2:
 	angle = clamp(angle, deg_to_rad(-162.0), deg_to_rad(-18.0))
 	var center_angle: float = -PI * 0.5
 	var angle_step: float = deg_to_rad(1.6)
+	sync_shot_planner()
 	for _index in range(24):
 		var candidate_direction: Vector2 = Vector2(cos(angle), sin(angle)).normalized()
-		if not first_wall_bounce_too_low(candidate_direction):
+		if not shot_planner.first_wall_bounce_too_low(candidate_direction):
 			return candidate_direction
 		if angle < center_angle:
 			angle += angle_step
 		else:
 			angle -= angle_step
 	return Vector2(cos(angle), sin(angle)).normalized()
-
-
-func first_wall_bounce_too_low(direction: Vector2) -> bool:
-	if absf(direction.x) <= 0.0001:
-		return false
-	var wall_x: float = board_left + bubble_radius if direction.x < 0.0 else board_right - bubble_radius
-	var travel_t: float = (wall_x - cannon_position.x) / direction.x
-	if travel_t <= 0.0:
-		return false
-	var wall_y: float = cannon_position.y + direction.y * travel_t
-	return wall_y > cannon_position.y - bubble_radius * 3.8
 
 
 func update_stack_animation(delta: float) -> bool:
@@ -1101,6 +598,9 @@ func update_stack_animation(delta: float) -> bool:
 		row_arrival_flash = maxf(0.0, row_arrival_flash - delta * 2.2)
 		animated = true
 
+	if animated:
+		sync_shot_planner()
+
 	return animated
 
 
@@ -1114,6 +614,7 @@ func kick_stack_drop(strength: float, gentle: bool) -> void:
 		else:
 			stack_settle_velocity = minf(stack_settle_velocity, -row_height * 0.78)
 			row_arrival_flash = 0.34
+		sync_shot_planner()
 		return
 
 	var capped_strength: float = minf(strength, row_height * 1.2)
@@ -1125,6 +626,7 @@ func kick_stack_drop(strength: float, gentle: bool) -> void:
 		stack_settle_velocity = minf(stack_settle_velocity, -row_height * 1.2)
 		row_arrival_flash = 1.0
 		spawn_ceiling_entry_fx()
+	sync_shot_planner()
 
 
 func spawn_ceiling_entry_fx() -> void:
@@ -1439,7 +941,7 @@ func draw_bubbles() -> void:
 	var rows_to_draw: int = mini(grid.size(), max_rows_visible + 1)
 	for row in range(rows_to_draw):
 		for col in range(GRID_COLUMNS):
-			if grid[row][col] == -1:
+			if grid[row][col] == BubbleBoardState.EMPTY_CELL:
 				continue
 			var bubble_center: Vector2 = cell_to_world(row, col)
 			if bubble_center.y > lose_line_y + bubble_radius:
@@ -1546,34 +1048,8 @@ func draw_launcher() -> void:
 
 
 func trace_aim_path(direction: Vector2) -> Array[Vector2]:
-	var points: Array[Vector2] = [cannon_position]
-	var point: Vector2 = cannon_position
-	var simulated_velocity: Vector2 = direction * bubble_radius * 1.7
-
-	for _index in range(36):
-		var next_point: Vector2 = point + simulated_velocity
-		var event: Dictionary = find_first_path_event(point, next_point)
-		if event.is_empty():
-			point = next_point
-			points.append(point)
-			continue
-
-		var event_type: String = event["type"]
-		point = event["position"]
-		points.append(point)
-
-		if event_type == "wall":
-			var wall_side: String = event["side"]
-			if wall_side == "left":
-				simulated_velocity.x = abs(simulated_velocity.x)
-			else:
-				simulated_velocity.x = -abs(simulated_velocity.x)
-			point += simulated_velocity.normalized() * 0.2
-			continue
-
-		break
-
-	return points
+	sync_shot_planner()
+	return shot_planner.trace_aim_path(direction)
 
 
 func draw_aim_guide(direction: Vector2) -> void:
