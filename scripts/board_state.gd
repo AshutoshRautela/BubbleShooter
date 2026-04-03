@@ -47,19 +47,18 @@ func resolve_placed_bubble(snap: Vector2i, bubble_color: int, rng: RandomNumberG
 
 	if total_removed == 0:
 		score += 5
-		status_message = "No match. New row in %d shots." % [maxi(shots_until_shift - 1, 0)]
 
 	if count_bubbles() == 0:
 		score += 150
 		wave += 1
 		shots_until_shift = shots_per_shift
-		_spawn_wave(rng)
 		status_message = "Board cleared. Wave %d begins." % wave
 		board_cleared = true
 	else:
 		shots_until_shift -= 1
+		if total_removed == 0:
+			status_message = "No match. New row in %d shots." % [maxi(shots_until_shift, 0)]
 		if shots_until_shift <= 0:
-			push_row_from_ceiling(rng)
 			shots_until_shift = shots_per_shift
 			row_pushed = true
 
@@ -71,6 +70,15 @@ func resolve_placed_bubble(snap: Vector2i, bubble_color: int, rng: RandomNumberG
 		"row_pushed": row_pushed,
 		"burst_row_parity_offset": burst_row_parity_offset,
 	}
+
+
+func apply_resolution_followup(result: Dictionary, rng: RandomNumberGenerator) -> void:
+	if result["board_cleared"]:
+		_spawn_wave(rng)
+		return
+
+	if result["row_pushed"]:
+		push_row_from_ceiling(rng)
 
 
 func current_palette_size() -> int:
