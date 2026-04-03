@@ -71,6 +71,9 @@ var mobile_low_fx: bool = false
 var touch_aim_active: bool = false
 var fps_update_timer: float = 0.0
 var smoothed_frame_ms: float = 16.0
+var wave_transform_offset: Vector2 = Vector2.ZERO
+var wave_transform_scale: float = 1.0
+var wave_transform_glow: float = 0.0
 
 
 func _ready() -> void:
@@ -280,7 +283,7 @@ func update_layout() -> void:
 	board_top = viewport_size.y * 0.14
 	cannon_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.86)
 	lose_line_y = cannon_position.y - bubble_radius * 2.8
-	shot_speed = bubble_radius * 45.0
+	shot_speed = bubble_radius * 63.0
 	max_rows_visible = maxi(10, int(floor((lose_line_y - board_top - bubble_radius) / row_height)))
 	if aim_target == Vector2.ZERO:
 		aim_target = cannon_position + Vector2.UP * 320.0
@@ -645,8 +648,9 @@ func update_particles(delta: float) -> bool:
 	if pop_particles.is_empty():
 		return false
 
-	var survivors: Array[Dictionary] = []
-	for particle in pop_particles:
+	var write_index: int = 0
+	for read_index in range(pop_particles.size()):
+		var particle: Dictionary = pop_particles[read_index]
 		var remaining: float = particle["life"] - delta
 		if remaining <= 0.0:
 			continue
@@ -658,27 +662,34 @@ func update_particles(delta: float) -> bool:
 		particle["life"] = remaining
 		particle["position"] = position
 		particle["velocity"] = velocity
-		survivors.append(particle)
+		pop_particles[write_index] = particle
+		write_index += 1
 
-	pop_particles = survivors
-	return true
+	if write_index != pop_particles.size():
+		pop_particles.resize(write_index)
+
+	return not pop_particles.is_empty()
 
 
 func update_hit_waves(delta: float) -> bool:
 	if hit_waves.is_empty():
 		return false
 
-	var survivors: Array[Dictionary] = []
-	for wave in hit_waves:
+	var write_index: int = 0
+	for read_index in range(hit_waves.size()):
+		var wave: Dictionary = hit_waves[read_index]
 		var age: float = wave["age"] + delta
 		var duration: float = wave["duration"]
 		if age >= duration:
 			continue
 		wave["age"] = age
-		survivors.append(wave)
+		hit_waves[write_index] = wave
+		write_index += 1
 
-	hit_waves = survivors
-	return true
+	if write_index != hit_waves.size():
+		hit_waves.resize(write_index)
+
+	return not hit_waves.is_empty()
 
 
 func spawn_hit_wave(origin: Vector2, strength: float) -> void:
@@ -720,57 +731,63 @@ func spawn_hit_wave(origin: Vector2, strength: float) -> void:
 		hit_waves.remove_at(0)
 
 
-func get_hit_wave_transform(center: Vector2) -> Dictionary:
-	var total_offset: Vector2 = Vector2.ZERO
-	var total_scale: float = 1.0
-	var total_glow: float = 0.0
+func evaluate_hit_wave_transform(center: Vector2) -> void:
+	wave_transform_offset = Vector2.ZERO
+	wave_transform_scale = 1.0
+	wave_transform_glow = 0.0
+
+	if hit_waves.is_empty():
+		return
+
+	var max_radius: float = bubble_diameter * 2.7
 
 	for wave in hit_waves:
 		var origin: Vector2 = wave["origin"]
 		var age: float = wave["age"]
 		if age <= 0.0:
 			continue
-		var duration: float = wave["duration"]
 		var strength: float = wave["strength"]
 		var to_center: Vector2 = center - origin
 		var distance: float = to_center.length()
 		var travel_speed: float = wave["speed"]
-		var max_radius: float = bubble_diameter * 2.7
 		if distance > max_radius:
-			continue
-
-		var arrival_time: float = distance / maxf(travel_speed, 1.0)
-		var local_time: float = age - arrival_time
-		var blast_time: float = age - arrival_time * 0.35
-		if local_time <= -0.02 and blast_time <= 0.0:
 			continue
 
 		var distance_fade: float = maxf(0.0, 1.0 - distance / max_radius)
 		distance_fade = distance_fade * distance_fade
-		var oscillation: float = 0.0
-		if local_time > 0.0:
-			var oscillation_window: float = 0.26 if mobile_low_fx else 0.34
-			if local_time < oscillation_window:
-				var oscillation_phase: float = local_time / oscillation_window
-				var pulse_count: float = 2.6 if mobile_low_fx else 3.2
-				oscillation = maxf(0.0, sin(oscillation_phase * PI * pulse_count)) * pow(1.0 - oscillation_phase, 1.7)
-		var blast: float = 0.0
-		if blast_time > 0.0:
-			blast = exp(-blast_time * 11.0)
-		var amplitude: float = (absf(oscillation) * 0.62 + blast * 0.48) * distance_fade * strength
+		var amplitude: float = 0.0
+		if mobile_low_fx:
+			var ring_radius: float = age * travel_speed
+			var ring_width: float = maxf(wave["width"] * 1.35, bubble_radius * 0.9)
+			var ring_delta: float = absf(distance - ring_radius)
+			if ring_delta > ring_width:
+				continue
+			amplitude = (1.0 - ring_delta / ring_width) * distance_fade * strength * 0.42
+		else:
+			var arrival_time: float = distance / maxf(travel_speed, 1.0)
+			var local_time: float = age - arrival_time
+			var blast_time: float = age - arrival_time * 0.35
+			if local_time <= -0.02 and blast_time <= 0.0:
+				continue
+
+			var oscillation: float = 0.0
+			if local_time > 0.0:
+				var oscillation_window: float = 0.34
+				if local_time < oscillation_window:
+					var oscillation_phase: float = local_time / oscillation_window
+					oscillation = maxf(0.0, sin(oscillation_phase * PI * 3.2)) * pow(1.0 - oscillation_phase, 1.7)
+			var blast: float = 0.0
+			if blast_time > 0.0:
+				blast = exp(-blast_time * 11.0)
+			amplitude = (absf(oscillation) * 0.62 + blast * 0.48) * distance_fade * strength
+
 		if amplitude <= 0.001:
 			continue
 
 		var direction: Vector2 = Vector2.ZERO if distance <= 0.001 else to_center / distance
-		total_offset += direction * bubble_radius * (0.18 * amplitude)
-		total_scale += 0.16 * amplitude
-		total_glow += 0.62 * amplitude
-
-	return {
-		"offset": total_offset,
-		"scale": total_scale,
-		"glow": total_glow,
-	}
+		wave_transform_offset += direction * bubble_radius * (0.18 * amplitude)
+		wave_transform_scale += 0.16 * amplitude
+		wave_transform_glow += 0.62 * amplitude
 
 
 func spawn_stack_impact_sparks(center: Vector2, bubble_color: Color) -> void:
@@ -782,7 +799,10 @@ func spawn_stack_impact_sparks(center: Vector2, bubble_color: Color) -> void:
 
 
 func spawn_pop_burst(center: Vector2, bubble_color: Color, count: int, size_scale: float) -> void:
+	var limit: int = MAX_PARTICLES_MOBILE if mobile_low_fx else MAX_PARTICLES_DESKTOP
 	for _index in range(count):
+		if pop_particles.size() >= limit:
+			break
 		var angle: float = rng.randf_range(0.0, TAU)
 		var speed: float = rng.randf_range(bubble_radius * 3.6, bubble_radius * 7.4)
 		var life: float = rng.randf_range(0.22, 0.5)
@@ -795,10 +815,12 @@ func spawn_pop_burst(center: Vector2, bubble_color: Color, count: int, size_scal
 			"size": size_scale * rng.randf_range(0.8, 1.5),
 			"color": particle_color,
 		})
-	trim_particles()
 
 
 func spawn_spark(center: Vector2, spark_color: Color, push: Vector2) -> void:
+	var limit: int = MAX_PARTICLES_MOBILE if mobile_low_fx else MAX_PARTICLES_DESKTOP
+	if pop_particles.size() >= limit:
+		return
 	var particle_color: Color = spark_color.lerp(Color(1.0, 1.0, 1.0, 1.0), 0.4)
 	pop_particles.append({
 		"position": center,
@@ -808,13 +830,6 @@ func spawn_spark(center: Vector2, spark_color: Color, push: Vector2) -> void:
 		"size": bubble_radius * 0.16,
 		"color": particle_color,
 	})
-	trim_particles()
-
-
-func trim_particles() -> void:
-	var limit: int = MAX_PARTICLES_MOBILE if mobile_low_fx else MAX_PARTICLES_DESKTOP
-	while pop_particles.size() > limit:
-		pop_particles.remove_at(0)
 
 
 func draw_background_accents() -> void:
@@ -914,17 +929,19 @@ func draw_playfield() -> void:
 		3.0
 	)
 
-	var rows_to_draw: int = mini(grid.size() + 2, max_rows_visible)
-	for row in range(rows_to_draw):
-		for col in range(GRID_COLUMNS):
-			if cell_occupied(row, col):
-				continue
-			var cell_center: Vector2 = cell_to_world(row, col)
-			if cell_center.y >= lose_line_y - bubble_radius * 0.4:
-				continue
-			draw_circle(cell_center, bubble_radius * 0.12, Color(0.77, 0.96, 0.99, 0.08))
-			if not mobile_low_fx:
-				draw_arc(cell_center, bubble_radius * 0.34, 0.0, TAU, 18, Color(0.77, 0.96, 0.99, 0.045), 1.2, true)
+	var show_empty_slots: bool = not mobile_low_fx or (state == STATE_AIMING and absf(stack_visual_offset) < 0.02 and row_arrival_flash <= 0.0 and hit_waves.is_empty())
+	if show_empty_slots:
+		var rows_to_draw: int = mini(grid.size() + 2, max_rows_visible)
+		for row in range(rows_to_draw):
+			for col in range(GRID_COLUMNS):
+				if cell_occupied(row, col):
+					continue
+				var cell_center: Vector2 = cell_to_world(row, col)
+				if cell_center.y >= lose_line_y - bubble_radius * 0.4:
+					continue
+				draw_circle(cell_center, bubble_radius * 0.12, Color(0.77, 0.96, 0.99, 0.08))
+				if not mobile_low_fx:
+					draw_arc(cell_center, bubble_radius * 0.34, 0.0, TAU, 18, Color(0.77, 0.96, 0.99, 0.045), 1.2, true)
 
 
 func draw_lose_line() -> void:
@@ -946,15 +963,15 @@ func draw_bubbles() -> void:
 			var bubble_center: Vector2 = cell_to_world(row, col)
 			if bubble_center.y > lose_line_y + bubble_radius:
 				continue
-			var wave_transform: Dictionary = get_hit_wave_transform(bubble_center)
-			var transformed_center: Vector2 = bubble_center + wave_transform["offset"]
+			evaluate_hit_wave_transform(bubble_center)
+			var transformed_center: Vector2 = bubble_center + wave_transform_offset
 			var row_glow: float = 1.0
 			var row_radius: float = bubble_radius
 			if row == 0 and row_arrival_flash > 0.0:
 				row_glow += row_arrival_flash * 0.7
 				row_radius *= 1.0 + row_arrival_flash * 0.06
-			row_glow += wave_transform["glow"]
-			row_radius *= wave_transform["scale"]
+			row_glow += wave_transform_glow
+			row_radius *= wave_transform_scale
 			draw_bubble(transformed_center, COLORS[int(grid[row][col])], row_radius, row_glow)
 
 	if not active_bubble.is_empty():
