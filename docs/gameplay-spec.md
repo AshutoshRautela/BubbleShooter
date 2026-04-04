@@ -19,8 +19,8 @@ When a bubble lands, the following steps execute **in strict order**. No step st
      d. Compact grid (trim empty trailing rows)
      e. Calculate score
 5. Check board-cleared condition (if grid empty → wave complete, skip steps 6–7)
-6. Decrement shots_until_shift  ← happens on EVERY shot, match or no-match
-     a. If shots_until_shift <= 0: push new row from ceiling, reset counter
+6. ~~Decrement shots_until_shift~~ *(currently disabled — shift counter is not called from the game loop)*
+     ~~a. If shots_until_shift <= 0: push new row from ceiling, reset counter~~
 7. Check loss condition
 8. Advance shot queue (next_color → current_color, generate new next_color)
 ```
@@ -301,14 +301,18 @@ on bubble placed:
     → Wave Complete screen
 
   else:
-    shots_until_shift -= 1   # every shot, regardless of match or no-match
-
-    if shots_until_shift <= 0:
-      push_row_from_ceiling()
-      shots_until_shift = shots_per_shift_for_wave(wave)
+    # Shift mechanic (currently disabled — try_push_shift_row is not called from game loop)
+    # shots_until_shift -= 1
+    # if shots_until_shift <= 0:
+    #   push_row_from_ceiling()
+    #   shots_until_shift = shots_per_shift_for_wave(wave)
+    #
+    # Baseline refill: if grid.size() < initial_visible_rows(),
+    # reserve rows are inserted at position 0 (ceiling) to maintain minimum board.
+    pass
 ```
 
-**`shots_per_shift_for_wave(wave)` lookup:**
+**`shots_per_shift_for_wave(wave)` lookup** *(for future re-enablement)*:
 
 | Wave Range | Shots/Shift |
 |---|---|
