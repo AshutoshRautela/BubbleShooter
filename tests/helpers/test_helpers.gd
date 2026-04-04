@@ -46,7 +46,7 @@ static func make_shot_planner(board: BubbleBoardState, layout_overrides: Diction
 		"bubble_diameter": bubble_diameter,
 		"row_height": float(layout_overrides.get("row_height", bubble_radius * 1.72)),
 		"max_rows_visible": int(layout_overrides.get("max_rows_visible", 12)),
-		"start_rows": int(layout_overrides.get("start_rows", board.current_wave_start_rows())),
+		"start_rows": int(layout_overrides.get("start_rows", board.current_wave_visible_rows())),
 		"cannon_position": layout_overrides.get("cannon_position", Vector2(290.0, 620.0)),
 		"stack_visual_offset": float(layout_overrides.get("stack_visual_offset", 0.0)),
 	}

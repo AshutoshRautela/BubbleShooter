@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 780" width="360" height="780"
+     font-family="'Nunito', system-ui, sans-serif">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Titan+One&amp;family=Nunito:wght@400;600;700;800&amp;display=swap');</style>
+
+    <radialGradient id="bg-grad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#2870D8"/>
+      <stop offset="100%" stop-color="#0C2280"/>
+    </radialGradient>
+    <radialGradient id="b-r" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffaaaa"/>
+      <stop offset="50%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#c73c3c"/>
+    </radialGradient>
+    <radialGradient id="b-y" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffecaa"/>
+      <stop offset="50%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#c99230"/>
+    </radialGradient>
+    <radialGradient id="b-t" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aaf0eb"/>
+      <stop offset="50%" stop-color="#4ecdc4"/>
+      <stop offset="100%" stop-color="#1e9b93"/>
+    </radialGradient>
+    <radialGradient id="b-b" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aad8f4"/>
+      <stop offset="50%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#1e6aac"/>
+    </radialGradient>
+    <radialGradient id="b-p" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#d0c0fd"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6840d6"/>
+    </radialGradient>
+    <radialGradient id="b-g" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#c2f4a0"/>
+      <stop offset="50%" stop-color="#95e06c"/>
+      <stop offset="100%" stop-color="#4ea83c"/>
+    </radialGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-sm" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="card-shadow" x="-8%" y="-6%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#051040" flood-opacity="0.5"/>
+    </filter>
+    <filter id="lose-glow" x="-5%" y="-400%" width="110%" height="900%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="aim-glow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="360" height="780" fill="url(#bg-grad)"/>
+
+  <!-- Decorative bg circles -->
+  <circle cx="60"  cy="580" r="130" fill="white" opacity="0.025"/>
+  <circle cx="320" cy="660" r="95"  fill="white" opacity="0.02"/>
+
+  <!-- HUD panel — white translucent -->
+  <rect x="0" y="0" width="360" height="88" fill="white" opacity="0.12"/>
+  <rect x="0" y="0" width="360" height="88" fill="none" stroke="white" stroke-width="1.5" stroke-opacity="0.3"/>
+  <!-- Bottom border accent -->
+  <line x1="0" y1="88" x2="360" y2="88" stroke="white" stroke-width="2" opacity="0.5"/>
+
+  <!-- SCORE block (left) -->
+  <text x="24" y="26" font-family="'Titan One', cursive" font-size="11" fill="white" opacity="0.75"
+        letter-spacing="2">SCORE</text>
+  <text x="26" y="61" font-family="'Titan One', cursive" font-size="26"
+        fill="#040e3a" opacity="0.7">12,450</text>
+  <text x="24" y="58" font-family="'Titan One', cursive" font-size="26" fill="white"
+        paint-order="stroke fill" stroke="#0C2280" stroke-width="5" stroke-linejoin="round">12,450</text>
+
+  <!-- WAVE block (center) -->
+  <text x="180" y="26" font-family="'Titan One', cursive" font-size="11" fill="white" opacity="0.75"
+        letter-spacing="2" text-anchor="middle">WAVE</text>
+  <text x="182" y="63" font-family="'Titan One', cursive" font-size="26"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">24</text>
+  <text x="180" y="60" font-family="'Titan One', cursive" font-size="26" fill="#FFD233" text-anchor="middle"
+        paint-order="stroke fill" stroke="#0C2280" stroke-width="6" stroke-linejoin="round">24</text>
+  <text x="180" y="80" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="middle" opacity="0.7">New row in 3 shots</text>
+
+  <!-- Pause button — white circle, blue icon -->
+  <circle cx="332" cy="44" r="22" fill="white" opacity="0.2"/>
+  <circle cx="332" cy="44" r="20" fill="white" stroke="white" stroke-width="1"/>
+  <rect x="325" y="36" width="6"  height="17" rx="3" fill="#1040A0"/>
+  <rect x="334" y="36" width="6"  height="17" rx="3" fill="#1040A0"/>
+
+  <!-- BUBBLE GRID — 6 rows, r=16 -->
+  <!-- Row 0 y=116, even: x=20..340 -->
+  <circle cx="20"  cy="116" r="16" fill="#4ecdc4" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="20"  cy="116" r="16" fill="url(#b-t)"/>
+  <ellipse cx="15.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 15.5 110.9)"/>
+  <ellipse cx="21.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="60"  cy="116" r="16" fill="#ff6b6b" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="60"  cy="116" r="16" fill="url(#b-r)"/>
+  <ellipse cx="55.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 55.5 110.9)"/>
+  <ellipse cx="61.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="100" cy="116" r="16" fill="#a78bfa" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="100" cy="116" r="16" fill="url(#b-p)"/>
+  <ellipse cx="95.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 95.5 110.9)"/>
+  <ellipse cx="101.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="140" cy="116" r="16" fill="#ffd166" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="140" cy="116" r="16" fill="url(#b-y)"/>
+  <ellipse cx="135.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 135.5 110.9)"/>
+  <ellipse cx="141.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="180" cy="116" r="16" fill="#5dade2" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="180" cy="116" r="16" fill="url(#b-b)"/>
+  <ellipse cx="175.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 175.5 110.9)"/>
+  <ellipse cx="181.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="220" cy="116" r="16" fill="#95e06c" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="220" cy="116" r="16" fill="url(#b-g)"/>
+  <ellipse cx="215.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 215.5 110.9)"/>
+  <ellipse cx="221.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="260" cy="116" r="16" fill="#ff6b6b" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="260" cy="116" r="16" fill="url(#b-r)"/>
+  <ellipse cx="255.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 255.5 110.9)"/>
+  <ellipse cx="261.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="300" cy="116" r="16" fill="#4ecdc4" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="300" cy="116" r="16" fill="url(#b-t)"/>
+  <ellipse cx="295.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 295.5 110.9)"/>
+  <ellipse cx="301.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="340" cy="116" r="16" fill="#a78bfa" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="340" cy="116" r="16" fill="url(#b-p)"/>
+  <ellipse cx="335.5" cy="110.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 335.5 110.9)"/>
+  <ellipse cx="341.6" cy="125.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+
+  <!-- Row 1 y=149, odd: x=40,80,120,160,200,240,280,320 -->
+  <circle cx="40"  cy="149" r="16" fill="url(#b-y)"/>
+  <ellipse cx="35.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 35.5 143.9)"/>
+  <ellipse cx="41.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="80"  cy="149" r="16" fill="url(#b-b)"/>
+  <ellipse cx="75.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 75.5 143.9)"/>
+  <ellipse cx="81.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="120" cy="149" r="16" fill="url(#b-g)"/>
+  <ellipse cx="115.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 115.5 143.9)"/>
+  <ellipse cx="121.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="160" cy="149" r="16" fill="url(#b-r)"/>
+  <ellipse cx="155.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 155.5 143.9)"/>
+  <ellipse cx="161.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="200" cy="149" r="16" fill="url(#b-p)"/>
+  <ellipse cx="195.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 195.5 143.9)"/>
+  <ellipse cx="201.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="240" cy="149" r="16" fill="url(#b-t)"/>
+  <ellipse cx="235.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 235.5 143.9)"/>
+  <ellipse cx="241.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="280" cy="149" r="16" fill="url(#b-y)"/>
+  <ellipse cx="275.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 275.5 143.9)"/>
+  <ellipse cx="281.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+  <circle cx="320" cy="149" r="16" fill="url(#b-b)"/>
+  <ellipse cx="315.5" cy="143.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 315.5 143.9)"/>
+  <ellipse cx="321.6" cy="158.3" rx="7.0" ry="2.7" fill="white" opacity="0.12"/>
+
+  <!-- Row 2 y=182, even — sparse -->
+  <circle cx="20"  cy="182" r="16" fill="url(#b-g)"/>
+  <ellipse cx="15.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 15.5 176.9)"/>
+  <circle cx="60"  cy="182" r="16" fill="url(#b-r)"/>
+  <ellipse cx="55.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 55.5 176.9)"/>
+  <circle cx="140" cy="182" r="16" fill="url(#b-t)"/>
+  <ellipse cx="135.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 135.5 176.9)"/>
+  <circle cx="180" cy="182" r="16" fill="url(#b-y)"/>
+  <ellipse cx="175.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 175.5 176.9)"/>
+  <circle cx="220" cy="182" r="16" fill="url(#b-b)"/>
+  <ellipse cx="215.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 215.5 176.9)"/>
+  <circle cx="300" cy="182" r="16" fill="url(#b-p)"/>
+  <ellipse cx="295.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 295.5 176.9)"/>
+  <circle cx="340" cy="182" r="16" fill="url(#b-g)"/>
+  <ellipse cx="335.5" cy="176.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 335.5 176.9)"/>
+
+  <!-- Row 3 y=215, odd — sparser -->
+  <circle cx="80"  cy="215" r="16" fill="url(#b-p)"/>
+  <ellipse cx="75.5" cy="209.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 75.5 209.9)"/>
+  <circle cx="120" cy="215" r="16" fill="url(#b-t)"/>
+  <ellipse cx="115.5" cy="209.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 115.5 209.9)"/>
+  <circle cx="200" cy="215" r="16" fill="url(#b-g)"/>
+  <ellipse cx="195.5" cy="209.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 195.5 209.9)"/>
+  <circle cx="240" cy="215" r="16" fill="url(#b-r)"/>
+  <ellipse cx="235.5" cy="209.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 235.5 209.9)"/>
+  <circle cx="320" cy="215" r="16" fill="url(#b-y)"/>
+  <ellipse cx="315.5" cy="209.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 315.5 209.9)"/>
+
+  <!-- Row 4 y=248, even — very sparse -->
+  <circle cx="20"  cy="248" r="16" fill="url(#b-r)"/>
+  <ellipse cx="15.5" cy="242.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 15.5 242.9)"/>
+  <circle cx="100" cy="248" r="16" fill="url(#b-b)"/>
+  <ellipse cx="95.5" cy="242.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 95.5 242.9)"/>
+  <circle cx="220" cy="248" r="16" fill="url(#b-t)"/>
+  <ellipse cx="215.5" cy="242.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 215.5 242.9)"/>
+  <circle cx="340" cy="248" r="16" fill="url(#b-g)"/>
+  <ellipse cx="335.5" cy="242.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 335.5 242.9)"/>
+
+  <!-- Row 5 y=281, odd — just 2 -->
+  <circle cx="120" cy="281" r="16" fill="url(#b-p)"/>
+  <ellipse cx="115.5" cy="275.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 115.5 275.9)"/>
+  <circle cx="240" cy="281" r="16" fill="url(#b-y)"/>
+  <ellipse cx="235.5" cy="275.9" rx="6.7" ry="4.8" fill="white" opacity="0.55" transform="rotate(-28 235.5 275.9)"/>
+
+  <!-- DANGER ZONE line — bright red/orange with glow -->
+  <line x1="0" y1="490" x2="360" y2="490" stroke="#FF4422" stroke-width="4" stroke-dasharray="8 5"
+        opacity="0.6" filter="url(#lose-glow)"/>
+  <line x1="0" y1="490" x2="360" y2="490" stroke="#FF6633" stroke-width="2" stroke-dasharray="8 5" opacity="0.95"/>
+  <text x="8" y="484" font-family="'Titan One', cursive" font-size="10" fill="#FF6633" opacity="0.9"
+        filter="url(#glow-sm)" letter-spacing="1">DANGER ZONE</text>
+
+  <!-- AIM GUIDE — bright white/cyan dashed -->
+  <line x1="180" y1="672" x2="28"  y2="360" stroke="white" stroke-width="2.5" stroke-dasharray="9 6"
+        opacity="0.5" filter="url(#aim-glow)"/>
+  <line x1="180" y1="672" x2="28"  y2="360" stroke="#A0E8FF" stroke-width="1.5" stroke-dasharray="9 6" opacity="0.75"/>
+  <line x1="28"  y1="360" x2="152" y2="198" stroke="white" stroke-width="2.5" stroke-dasharray="9 6"
+        opacity="0.35" filter="url(#aim-glow)"/>
+  <line x1="28"  y1="360" x2="152" y2="198" stroke="#A0E8FF" stroke-width="1.5" stroke-dasharray="9 6" opacity="0.5"/>
+  <!-- Bounce dot -->
+  <circle cx="28" cy="360" r="6" fill="#A0E8FF" opacity="0.7" filter="url(#glow-sm)"/>
+  <circle cx="28" cy="360" r="4" fill="white"   opacity="0.95"/>
+  <!-- Aim target -->
+  <circle cx="152" cy="198" r="9"  fill="white"   opacity="0.5" filter="url(#glow)"/>
+  <circle cx="152" cy="198" r="6"  fill="white"   opacity="0.9"/>
+  <circle cx="152" cy="198" r="13" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- NEXT bubble label -->
+  <text x="318" y="606" font-family="'Titan One', cursive" font-size="10" fill="white"
+        text-anchor="middle" opacity="0.8" letter-spacing="1">NEXT</text>
+  <!-- next bubble -->
+  <circle cx="318" cy="630" r="16" fill="#ff6b6b" opacity="0.28" filter="url(#glow)"/>
+  <circle cx="318" cy="630" r="14" fill="url(#b-r)"/>
+  <ellipse cx="314.1" cy="625.5" rx="5.9" ry="4.2" fill="white" opacity="0.55" transform="rotate(-28 314.1 625.5)"/>
+  <ellipse cx="319.4" cy="638.1" rx="6.2" ry="2.4" fill="white" opacity="0.12"/>
+
+  <!-- ACTIVE bubble at cannon -->
+  <circle cx="180" cy="672" r="23" fill="#a78bfa" opacity="0.28" filter="url(#glow)"/>
+  <circle cx="180" cy="672" r="20" fill="url(#b-p)" filter="url(#glow-sm)"/>
+  <ellipse cx="174.4" cy="665.6" rx="8.4" ry="6.0" fill="white" opacity="0.55" transform="rotate(-28 174.4 665.6)"/>
+  <ellipse cx="182.0" cy="683.6" rx="8.8" ry="3.4" fill="white" opacity="0.12"/>
+
+  <!-- CANNON — brighter, white/blue -->
+  <circle cx="180" cy="694" r="20" fill="white" opacity="0.12"/>
+  <!-- barrel -->
+  <rect x="170" y="692" width="20" height="48" rx="10" fill="#1A50C0" stroke="white" stroke-width="2"/>
+  <!-- barrel sheen -->
+  <rect x="173" y="695" width="5" height="40" rx="2.5" fill="white" opacity="0.15"/>
+  <!-- platform -->
+  <rect x="138" y="736" width="84" height="18" rx="9" fill="#1A50C0" stroke="white" stroke-width="1.5"/>
+  <!-- platform highlight -->
+  <rect x="140" y="737" width="80" height="5" rx="4" fill="white" opacity="0.14"/>
+
+  <!-- Screen label -->
+  <text x="180" y="774" font-size="11" fill="white" text-anchor="middle" opacity="0.3"
+        font-family="'Nunito', system-ui, sans-serif">03 — IN-GAME HUD</text>
+</svg>

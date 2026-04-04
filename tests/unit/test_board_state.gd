@@ -167,9 +167,10 @@ func test_milestone_multiplier_applies_to_board_clear_bonus() -> void:
 	assert_eq(board.score, 360, "Wave 10 clear should apply the 2x board-clear multiplier")
 
 
-func test_chunk_promotion_brings_in_upper_reserve_rows_after_visible_chunk_clears() -> void:
+func test_baseline_refill_after_chain_reaction() -> void:
 	var board = Helpers.make_board(4, 6)
 	board.wave = 1
+	board.playfield_visible_row_target = 4
 	Helpers.set_grid(board, [
 		[0, 0, BubbleBoardState.EMPTY_CELL, BubbleBoardState.EMPTY_CELL],
 	])
@@ -184,20 +185,63 @@ func test_chunk_promotion_brings_in_upper_reserve_rows_after_visible_chunk_clear
 		board.reserve_rows.append(row_copy)
 
 	var result: Dictionary = board.resolve_placed_bubble(Vector2i(0, 2), 0, rng)
-	assert_false(bool(result["board_cleared"]), "Clearing only the visible chunk should not clear the whole wave when reserve rows still exist")
-	assert_true(bool(result["chunk_advanced"]), "Clearing the visible chunk should schedule the next reserve chunk")
-	assert_eq(int(result["chunk_rows_promoted"]), 2, "The next reserve chunk size should be reported for reveal animation")
-	assert_array_eq_unordered(
-		Helpers.occupied_cells(board),
-		[],
-		"Reserve rows should not become active until the resolution follow-up runs"
-	)
+	assert_false(bool(result["board_cleared"]), "Wave not cleared while reserve rows remain")
+	assert_eq(board.reserve_rows.size(), 2, "Reserve must stay untouched until followup")
+
 	board.apply_resolution_followup(result, rng)
-	assert_array_eq_unordered(
-		Helpers.occupied_cells(board),
-		["0,0", "0,1", "1,0", "1,1"],
-		"The promoted reserve chunk should become the new active board during follow-up"
-	)
+	assert_true(board.grid.size() > 0, "Baseline refill should fill grid from reserve after chain cleared it")
+	assert_eq(board.reserve_rows.size(), 0, "Both reserve rows consumed to reach baseline")
+
+
+func test_shift_counter_pushes_extra_row() -> void:
+	var board = Helpers.make_board(9, 6)
+	board.wave = 1
+	board.playfield_visible_row_target = 12
+	board.shots_until_shift = 1
+	var initial_rows: int = 6
+	var rows: Array[Array] = []
+	for _r in range(initial_rows):
+		var row: Array[int] = []
+		for _c in range(9):
+			row.append(0)
+		rows.append(row)
+	Helpers.set_grid(board, rows)
+	board.reserve_rows.clear()
+	var reserve_row: Array[int] = []
+	for _c in range(9):
+		reserve_row.append(1)
+	board.reserve_rows.append(reserve_row.duplicate())
+
+	var grid_before: int = board.grid.size()
+	var shifted: int = board.try_push_shift_row()
+	assert_eq(shifted, 1, "Counter at 1 should fire and push 1 row")
+	assert_eq(board.grid.size(), grid_before + 1, "Grid should grow by 1 after shift")
+	assert_eq(board.reserve_rows.size(), 0, "Reserve row consumed")
+	assert_eq(board.shots_until_shift, board.shots_per_shift, "Counter should reset after firing")
+
+
+func test_shift_counter_does_not_fire_early() -> void:
+	var board = Helpers.make_board(9, 6)
+	board.wave = 1
+	board.shots_until_shift = 3
+	var rows: Array[Array] = []
+	for _r in range(4):
+		var row: Array[int] = []
+		for _c in range(9):
+			row.append(0)
+		rows.append(row)
+	Helpers.set_grid(board, rows)
+	board.reserve_rows.clear()
+	var reserve_row: Array[int] = []
+	for _c in range(9):
+		reserve_row.append(1)
+	board.reserve_rows.append(reserve_row.duplicate())
+
+	var grid_before: int = board.grid.size()
+	var shifted: int = board.try_push_shift_row()
+	assert_eq(shifted, 0, "Counter at 3 should not fire yet")
+	assert_eq(board.grid.size(), grid_before, "Grid should not change when counter > 1")
+	assert_eq(board.reserve_rows.size(), 1, "Reserve should stay untouched")
 
 
 func test_yellow_bridge_pops_detached_blues_should_fall() -> void:
@@ -260,6 +304,46 @@ func test_wave_preview_rows_keep_upper_reserve_before_visible_chunk() -> void:
 		board.reserve_rows.append(row_copy)
 
 	var preview_rows: Array[Array] = board.wave_preview_rows()
-	assert_eq(int(preview_rows[0][0]), 1, "Preview rows should start with the upper reserve rows")
-	assert_eq(int(preview_rows[1][0]), 2, "Preview rows should preserve reserve ordering")
-	assert_eq(int(preview_rows[2][0]), 7, "Visible active rows should come after the reserve rows in preview order")
+	assert_eq(int(preview_rows[0][0]), 7, "Preview is top-to-bottom: active grid (ceiling chunk) first")
+	assert_eq(int(preview_rows[1][0]), 1, "Then reserve rows in wave order toward the cannon")
+	assert_eq(int(preview_rows[2][0]), 2, "Reserve order preserved")
+
+
+func test_compact_grid_trims_leading_empty_rows_and_parity() -> void:
+	var board = Helpers.make_board(5, 6)
+	var empty: int = BubbleBoardState.EMPTY_CELL
+	Helpers.set_grid(board, [
+		[empty, empty, empty, empty, empty],
+		[empty, empty, empty, empty, empty],
+		[0, 0, 0, 0, 0],
+	], 1)
+	board.compact_grid()
+	assert_eq(board.grid.size(), 1, "Leading empty rows should be removed")
+	assert_eq(board.row_parity_offset, 1, "Removing two rows should toggle parity twice from starting 1")
+	for col in range(5):
+		assert_eq(int(board.grid[0][col]), 0, "Expected compact row to preserve cell at col %d" % col)
+
+
+func test_compact_grid_trailing_empty_does_not_flip_parity() -> void:
+	var board = Helpers.make_board(5, 6)
+	var empty: int = BubbleBoardState.EMPTY_CELL
+	Helpers.set_grid(board, [
+		[0, 0, 0, 0, 0],
+		[empty, empty, empty, empty, empty],
+	], 0)
+	board.compact_grid()
+	assert_eq(board.grid.size(), 1, "Only trailing empty row removed")
+	assert_eq(board.row_parity_offset, 0, "No bubble moved down a row index")
+
+
+func test_compact_grid_squeezes_middle_gap_and_flips_parity() -> void:
+	var board = Helpers.make_board(5, 6)
+	var empty: int = BubbleBoardState.EMPTY_CELL
+	Helpers.set_grid(board, [
+		[0, 0, 0, 0, 0],
+		[empty, empty, empty, empty, empty],
+		[1, 1, 1, 1, 1],
+	], 0)
+	board.compact_grid()
+	assert_eq(board.grid.size(), 2, "Middle air row removed")
+	assert_eq(board.row_parity_offset, 1, "Rows below gap shift up by one")

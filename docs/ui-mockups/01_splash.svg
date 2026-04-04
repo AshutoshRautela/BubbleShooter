@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 780" width="360" height="780"
+     font-family="'Nunito', system-ui, sans-serif">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Titan+One&amp;family=Nunito:wght@400;600;700;800&amp;display=swap');</style>
+
+    <radialGradient id="bg-grad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#2060CC"/>
+      <stop offset="100%" stop-color="#091A6A"/>
+    </radialGradient>
+
+    <radialGradient id="b-r" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffaaaa"/>
+      <stop offset="50%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#c73c3c"/>
+    </radialGradient>
+    <radialGradient id="b-y" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffecaa"/>
+      <stop offset="50%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#c99230"/>
+    </radialGradient>
+    <radialGradient id="b-t" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aaf0eb"/>
+      <stop offset="50%" stop-color="#4ecdc4"/>
+      <stop offset="100%" stop-color="#1e9b93"/>
+    </radialGradient>
+    <radialGradient id="b-b" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aad8f4"/>
+      <stop offset="50%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#1e6aac"/>
+    </radialGradient>
+    <radialGradient id="b-p" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#d0c0fd"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6840d6"/>
+    </radialGradient>
+    <radialGradient id="b-g" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#c2f4a0"/>
+      <stop offset="50%" stop-color="#95e06c"/>
+      <stop offset="100%" stop-color="#4ea83c"/>
+    </radialGradient>
+
+    <radialGradient id="cluster-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7FCFFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#7FCFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-sm" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="card-shadow" x="-8%" y="-6%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#051040" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="360" height="780" fill="url(#bg-grad)"/>
+
+  <!-- Decorative translucent depth circles -->
+  <circle cx="60"  cy="140" r="90"  fill="white" opacity="0.04"/>
+  <circle cx="310" cy="280" r="110" fill="white" opacity="0.03"/>
+  <circle cx="80"  cy="580" r="130" fill="white" opacity="0.035"/>
+  <circle cx="330" cy="660" r="95"  fill="white" opacity="0.03"/>
+
+  <!-- Sparkle stars -->
+  <circle cx="48"  cy="70"  r="2"   fill="white" opacity="0.65"/>
+  <circle cx="310" cy="55"  r="1.5" fill="white" opacity="0.55"/>
+  <circle cx="290" cy="190" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="30"  cy="350" r="2"   fill="white" opacity="0.5"/>
+  <circle cx="340" cy="430" r="1.5" fill="white" opacity="0.45"/>
+  <circle cx="55"  cy="680" r="2"   fill="white" opacity="0.5"/>
+  <circle cx="325" cy="720" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="160" cy="120" r="1.5" fill="white" opacity="0.35"/>
+  <circle cx="200" cy="700" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="18"  cy="480" r="1.5" fill="white" opacity="0.35"/>
+
+  <!-- Glow halo behind cluster -->
+  <ellipse cx="180" cy="320" rx="170" ry="120" fill="url(#cluster-glow)"/>
+
+  <!-- Bubble cluster Row 1 (3 bubbles) y=282, r=24 -->
+  <!-- teal -->
+  <circle cx="108" cy="282" r="24" fill="#4ecdc4" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="108" cy="282" r="24" fill="url(#b-t)" filter="url(#glow-sm)"/>
+  <ellipse cx="101.3" cy="274.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 101.3 274.3)"/>
+  <ellipse cx="110.4" cy="295.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- purple -->
+  <circle cx="180" cy="282" r="24" fill="#a78bfa" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="180" cy="282" r="24" fill="url(#b-p)" filter="url(#glow-sm)"/>
+  <ellipse cx="173.3" cy="274.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 173.3 274.3)"/>
+  <ellipse cx="182.4" cy="295.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- blue -->
+  <circle cx="252" cy="282" r="24" fill="#5dade2" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="252" cy="282" r="24" fill="url(#b-b)" filter="url(#glow-sm)"/>
+  <ellipse cx="245.3" cy="274.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 245.3 274.3)"/>
+  <ellipse cx="254.4" cy="295.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+
+  <!-- Bubble cluster Row 2 (4 bubbles) y=330, r=24 -->
+  <!-- red -->
+  <circle cx="72"  cy="330" r="24" fill="#ff6b6b" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="72"  cy="330" r="24" fill="url(#b-r)" filter="url(#glow-sm)"/>
+  <ellipse cx="65.3" cy="322.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 65.3 322.3)"/>
+  <ellipse cx="74.4" cy="343.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- green -->
+  <circle cx="144" cy="330" r="24" fill="#95e06c" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="144" cy="330" r="24" fill="url(#b-g)" filter="url(#glow-sm)"/>
+  <ellipse cx="137.3" cy="322.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 137.3 322.3)"/>
+  <ellipse cx="146.4" cy="343.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- yellow -->
+  <circle cx="216" cy="330" r="24" fill="#ffd166" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="216" cy="330" r="24" fill="url(#b-y)" filter="url(#glow-sm)"/>
+  <ellipse cx="209.3" cy="322.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 209.3 322.3)"/>
+  <ellipse cx="218.4" cy="343.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- teal -->
+  <circle cx="288" cy="330" r="24" fill="#4ecdc4" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="288" cy="330" r="24" fill="url(#b-t)" filter="url(#glow-sm)"/>
+  <ellipse cx="281.3" cy="322.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 281.3 322.3)"/>
+  <ellipse cx="290.4" cy="343.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+
+  <!-- Bubble cluster Row 3 (3 bubbles) y=378, r=24 -->
+  <!-- purple -->
+  <circle cx="108" cy="378" r="24" fill="#a78bfa" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="108" cy="378" r="24" fill="url(#b-p)" filter="url(#glow-sm)"/>
+  <ellipse cx="101.3" cy="370.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 101.3 370.3)"/>
+  <ellipse cx="110.4" cy="391.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- red -->
+  <circle cx="180" cy="378" r="24" fill="#ff6b6b" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="180" cy="378" r="24" fill="url(#b-r)" filter="url(#glow-sm)"/>
+  <ellipse cx="173.3" cy="370.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 173.3 370.3)"/>
+  <ellipse cx="182.4" cy="391.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+  <!-- green -->
+  <circle cx="252" cy="378" r="24" fill="#95e06c" opacity="0.22" filter="url(#glow)"/>
+  <circle cx="252" cy="378" r="24" fill="url(#b-g)" filter="url(#glow-sm)"/>
+  <ellipse cx="245.3" cy="370.3" rx="10.1" ry="7.2" fill="white" opacity="0.55" transform="rotate(-28 245.3 370.3)"/>
+  <ellipse cx="254.4" cy="391.9" rx="10.6" ry="4.1" fill="white" opacity="0.12"/>
+
+  <!-- BUBBLE SHOOTER title — cartoon outline style -->
+  <text x="183" y="459" font-family="'Titan One', cursive" font-size="48"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">BUBBLE</text>
+  <text x="180" y="455" font-family="'Titan One', cursive" font-size="48" text-anchor="middle"
+        paint-order="stroke fill" stroke="#040e3a" stroke-width="12" stroke-linejoin="round"
+        fill="#FFD233" letter-spacing="1">BUBBLE</text>
+  <text x="183" y="499" font-family="'Titan One', cursive" font-size="48"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">SHOOTER</text>
+  <text x="180" y="495" font-family="'Titan One', cursive" font-size="48" text-anchor="middle"
+        paint-order="stroke fill" stroke="#040e3a" stroke-width="12" stroke-linejoin="round"
+        fill="#FFD233" letter-spacing="1">SHOOTER</text>
+
+  <!-- tap to continue -->
+  <text x="180" y="535" font-family="'Nunito', system-ui, sans-serif" font-size="14"
+        fill="white" text-anchor="middle" opacity="0.8" font-weight="600">tap anywhere to continue</text>
+
+  <!-- Loading dots -->
+  <circle cx="163" cy="702" r="6"   fill="white" opacity="0.95" filter="url(#glow-sm)"/>
+  <circle cx="180" cy="702" r="6"   fill="white" opacity="0.4"/>
+  <circle cx="197" cy="702" r="6"   fill="white" opacity="0.18"/>
+
+  <!-- Screen label -->
+  <text x="180" y="762" font-size="11" fill="white" text-anchor="middle" opacity="0.3"
+        font-family="'Nunito', system-ui, sans-serif">01 — SPLASH</text>
+</svg>

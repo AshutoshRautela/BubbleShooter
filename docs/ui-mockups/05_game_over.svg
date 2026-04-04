@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 780" width="360" height="780"
+     font-family="'Nunito', system-ui, sans-serif">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Titan+One&amp;family=Nunito:wght@400;600;700;800&amp;display=swap');</style>
+
+    <radialGradient id="bg-grad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#2060CC"/>
+      <stop offset="100%" stop-color="#091A6A"/>
+    </radialGradient>
+    <radialGradient id="b-r" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffaaaa"/>
+      <stop offset="50%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#c73c3c"/>
+    </radialGradient>
+    <radialGradient id="b-y" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffecaa"/>
+      <stop offset="50%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#c99230"/>
+    </radialGradient>
+    <radialGradient id="b-t" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aaf0eb"/>
+      <stop offset="50%" stop-color="#4ecdc4"/>
+      <stop offset="100%" stop-color="#1e9b93"/>
+    </radialGradient>
+    <radialGradient id="b-b" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aad8f4"/>
+      <stop offset="50%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#1e6aac"/>
+    </radialGradient>
+    <radialGradient id="b-p" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#d0c0fd"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6840d6"/>
+    </radialGradient>
+    <radialGradient id="b-g" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#c2f4a0"/>
+      <stop offset="50%" stop-color="#95e06c"/>
+      <stop offset="100%" stop-color="#4ea83c"/>
+    </radialGradient>
+
+    <linearGradient id="card-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E50B0"/>
+      <stop offset="100%" stop-color="#122E80"/>
+    </linearGradient>
+    <linearGradient id="btn-green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6CD44A"/>
+      <stop offset="100%" stop-color="#3AA020"/>
+    </linearGradient>
+    <linearGradient id="btn-blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4A9EE8"/>
+      <stop offset="100%" stop-color="#2870C8"/>
+    </linearGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-sm" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="card-shadow" x="-8%" y="-6%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#051040" flood-opacity="0.5"/>
+    </filter>
+    <filter id="red-glow" x="-20%" y="-60%" width="140%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="360" height="780" fill="url(#bg-grad)"/>
+
+  <!-- Ghost grid — desaturated -->
+  <g opacity="0.07">
+    <circle cx="20"  cy="116" r="16" fill="#ccc"/>
+    <circle cx="60"  cy="116" r="16" fill="#ccc"/>
+    <circle cx="100" cy="116" r="16" fill="#ccc"/>
+    <circle cx="140" cy="116" r="16" fill="#ccc"/>
+    <circle cx="180" cy="116" r="16" fill="#ccc"/>
+    <circle cx="220" cy="116" r="16" fill="#ccc"/>
+    <circle cx="260" cy="116" r="16" fill="#ccc"/>
+    <circle cx="300" cy="116" r="16" fill="#ccc"/>
+    <circle cx="340" cy="116" r="16" fill="#ccc"/>
+    <circle cx="40"  cy="149" r="16" fill="#ccc"/>
+    <circle cx="80"  cy="149" r="16" fill="#ccc"/>
+    <circle cx="120" cy="149" r="16" fill="#ccc"/>
+    <circle cx="160" cy="149" r="16" fill="#ccc"/>
+    <circle cx="200" cy="149" r="16" fill="#ccc"/>
+    <circle cx="240" cy="149" r="16" fill="#ccc"/>
+    <circle cx="280" cy="149" r="16" fill="#ccc"/>
+    <circle cx="320" cy="149" r="16" fill="#ccc"/>
+  </g>
+
+  <!-- Dark overlay -->
+  <rect width="360" height="780" fill="#040D28" opacity="0.78"/>
+
+  <!-- Red glow behind GAME OVER title -->
+  <ellipse cx="180" cy="160" rx="170" ry="70" fill="#FF3300" opacity="0.18" filter="url(#glow)"/>
+
+  <!-- GAME OVER title — red/orange cartoon outline, very large -->
+  <text x="180" y="148" font-family="'Titan One', cursive" font-size="52" text-anchor="middle"
+        paint-order="stroke fill" stroke="#5a0000" stroke-width="12" stroke-linejoin="round"
+        fill="#FF4422" filter="url(#red-glow)" opacity="0.4">GAME OVER</text>
+  <text x="183" y="152" font-family="'Titan One', cursive" font-size="52"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">GAME</text>
+  <text x="180" y="148" font-family="'Titan One', cursive" font-size="52" text-anchor="middle"
+        paint-order="stroke fill" stroke="#5a0000" stroke-width="12" stroke-linejoin="round"
+        fill="#FF4422">GAME</text>
+  <text x="183" y="204" font-family="'Titan One', cursive" font-size="52"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">OVER</text>
+  <text x="180" y="200" font-family="'Titan One', cursive" font-size="52" text-anchor="middle"
+        paint-order="stroke fill" stroke="#5a0000" stroke-width="12" stroke-linejoin="round"
+        fill="#FF6633">OVER</text>
+
+  <text x="180" y="228" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" text-anchor="middle" opacity="0.7">The stack crossed the danger line.</text>
+
+  <!-- SCORE CARD -->
+  <rect x="28" y="244" width="304" height="220" rx="18" fill="url(#card-bg)" filter="url(#card-shadow)"
+        stroke="white" stroke-width="2.5" stroke-opacity="0.4"/>
+
+  <!-- Wave Reached block -->
+  <text x="90" y="284" font-family="'Titan One', cursive" font-size="11" fill="white" text-anchor="middle"
+        opacity="0.8" letter-spacing="1">WAVE REACHED</text>
+  <text x="90" y="326" font-family="'Titan One', cursive" font-size="40" fill="#FFD233" text-anchor="middle"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="8" stroke-linejoin="round">24</text>
+
+  <!-- Vertical divider -->
+  <line x1="180" y1="264" x2="180" y2="348" stroke="white" stroke-width="1" opacity="0.2"/>
+
+  <!-- Final Score block -->
+  <text x="270" y="284" font-family="'Titan One', cursive" font-size="11" fill="white" text-anchor="middle"
+        opacity="0.8" letter-spacing="1">FINAL SCORE</text>
+  <text x="270" y="322" font-family="'Titan One', cursive" font-size="28" fill="#FFD233" text-anchor="middle"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="6" stroke-linejoin="round">12,450</text>
+
+  <!-- Horizontal divider -->
+  <line x1="52" y1="355" x2="308" y2="355" stroke="white" stroke-width="1" opacity="0.2"/>
+
+  <!-- Personal best row -->
+  <text x="180" y="380" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" text-anchor="middle" opacity="0.75" font-weight="700">Personal Best</text>
+  <text x="148" y="416" font-family="'Titan One', cursive" font-size="24" fill="white" text-anchor="middle"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="5" stroke-linejoin="round">31,450</text>
+  <!-- Heart icon -->
+  <text x="216" y="416" font-size="22" text-anchor="middle" fill="#FF5577" opacity="0.85">&#9825;</text>
+  <text x="180" y="446" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="middle" opacity="0.5">not a personal record</text>
+
+  <!-- PLAY AGAIN button — green 3D -->
+  <rect x="70" y="492" width="220" height="52" rx="14" fill="#267A0A"/>
+  <rect x="70" y="486" width="220" height="52" rx="14" fill="url(#btn-green)"/>
+  <rect x="74" y="489" width="212" height="18" rx="10" fill="white" opacity="0.22"/>
+  <text x="180" y="519" font-family="'Titan One', cursive" font-size="20" text-anchor="middle"
+        paint-order="stroke fill" stroke="#0a3a00" stroke-width="4" stroke-linejoin="round"
+        fill="white" letter-spacing="1">PLAY AGAIN</text>
+
+  <!-- MAIN MENU button — blue 3D -->
+  <rect x="70" y="552" width="220" height="52" rx="14" fill="#1A5090"/>
+  <rect x="70" y="546" width="220" height="52" rx="14" fill="url(#btn-blue)"/>
+  <rect x="74" y="549" width="212" height="18" rx="10" fill="white" opacity="0.2"/>
+  <text x="180" y="579" font-family="'Titan One', cursive" font-size="20" text-anchor="middle"
+        paint-order="stroke fill" stroke="#0a2060" stroke-width="4" stroke-linejoin="round"
+        fill="white" letter-spacing="1">MAIN MENU</text>
+
+  <!-- High scores hint -->
+  <text x="180" y="634" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" text-anchor="middle" opacity="0.5" font-weight="600">View High Scores →</text>
+
+  <!-- Screen label -->
+  <text x="180" y="762" font-size="11" fill="white" text-anchor="middle" opacity="0.3"
+        font-family="'Nunito', system-ui, sans-serif">05 — GAME OVER</text>
+</svg>
