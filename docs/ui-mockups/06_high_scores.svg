@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 780" width="360" height="780"
+     font-family="'Nunito', system-ui, sans-serif">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Titan+One&amp;family=Nunito:wght@400;600;700;800&amp;display=swap');</style>
+
+    <radialGradient id="bg-grad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#2060CC"/>
+      <stop offset="100%" stop-color="#091A6A"/>
+    </radialGradient>
+    <radialGradient id="b-r" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffaaaa"/>
+      <stop offset="50%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#c73c3c"/>
+    </radialGradient>
+    <radialGradient id="b-y" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#ffecaa"/>
+      <stop offset="50%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#c99230"/>
+    </radialGradient>
+    <radialGradient id="b-t" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aaf0eb"/>
+      <stop offset="50%" stop-color="#4ecdc4"/>
+      <stop offset="100%" stop-color="#1e9b93"/>
+    </radialGradient>
+    <radialGradient id="b-b" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#aad8f4"/>
+      <stop offset="50%" stop-color="#5dade2"/>
+      <stop offset="100%" stop-color="#1e6aac"/>
+    </radialGradient>
+    <radialGradient id="b-p" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#d0c0fd"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6840d6"/>
+    </radialGradient>
+    <radialGradient id="b-g" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#c2f4a0"/>
+      <stop offset="50%" stop-color="#95e06c"/>
+      <stop offset="100%" stop-color="#4ea83c"/>
+    </radialGradient>
+
+    <linearGradient id="card-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E50B0"/>
+      <stop offset="100%" stop-color="#122E80"/>
+    </linearGradient>
+    <linearGradient id="gold-card-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2A3A10"/>
+      <stop offset="100%" stop-color="#1A2A08"/>
+    </linearGradient>
+    <linearGradient id="row1-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3A2800"/>
+      <stop offset="100%" stop-color="#221800"/>
+    </linearGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-sm" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="card-shadow" x="-8%" y="-6%" width="116%" height="124%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#051040" flood-opacity="0.5"/>
+    </filter>
+    <filter id="gold-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="360" height="780" fill="url(#bg-grad)"/>
+
+  <!-- Decorative depth circles -->
+  <circle cx="60"  cy="140" r="90"  fill="white" opacity="0.04"/>
+  <circle cx="310" cy="280" r="110" fill="white" opacity="0.03"/>
+  <circle cx="80"  cy="580" r="130" fill="white" opacity="0.035"/>
+  <circle cx="330" cy="660" r="95"  fill="white" opacity="0.03"/>
+
+  <!-- Sparkle stars -->
+  <circle cx="48"  cy="70"  r="2"   fill="white" opacity="0.65"/>
+  <circle cx="310" cy="55"  r="1.5" fill="white" opacity="0.55"/>
+  <circle cx="290" cy="190" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="30"  cy="350" r="2"   fill="white" opacity="0.5"/>
+  <circle cx="340" cy="430" r="1.5" fill="white" opacity="0.45"/>
+  <circle cx="55"  cy="680" r="2"   fill="white" opacity="0.5"/>
+  <circle cx="325" cy="720" r="1.5" fill="white" opacity="0.4"/>
+
+  <!-- Back button — white circle -->
+  <circle cx="36" cy="44" r="22" fill="white" opacity="0.18"/>
+  <circle cx="36" cy="44" r="20" fill="#1040A0" stroke="white" stroke-width="2.5"/>
+  <path d="M42 44 L30 44 M35 38 L28 44 L35 50" fill="none" stroke="white" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- HIGH SCORES title — gold cartoon outline -->
+  <text x="199" y="56" font-family="'Titan One', cursive" font-size="36"
+        text-anchor="middle" fill="#040e3a" opacity="0.7">HIGH SCORES</text>
+  <text x="196" y="52" font-family="'Titan One', cursive" font-size="36" text-anchor="middle"
+        paint-order="stroke fill" stroke="#040e3a" stroke-width="12" stroke-linejoin="round"
+        fill="#FFD233">HIGH SCORES</text>
+
+  <!-- BEST WAVE CARD — gold border -->
+  <rect x="24" y="72" width="312" height="104" rx="16" fill="#FFD233" opacity="0.15" filter="url(#gold-glow)"/>
+  <rect x="24" y="72" width="312" height="104" rx="16" fill="url(#card-bg)"
+        stroke="#FFD233" stroke-width="2.5" filter="url(#card-shadow)"/>
+  <!-- Gold top border accent -->
+  <line x1="52"  y1="72" x2="308" y2="72" stroke="#FFD233" stroke-width="3" opacity="0.9" filter="url(#glow-sm)"/>
+
+  <!-- Trophy in card -->
+  <circle cx="64" cy="124" r="26" fill="#B8700A" stroke="#FFD233" stroke-width="2.5" filter="url(#glow-sm)"/>
+  <path d="M55 112 L73 112 L73 126 Q73 134 64 134 Q55 134 55 126 Z" fill="#FFD233"/>
+  <path d="M55 118 Q49 123 51 128 Q52 131 55 131" fill="none" stroke="#FFD233" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M73 118 Q79 123 77 128 Q76 131 73 131" fill="none" stroke="#FFD233" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="61" y="134" width="6"  height="5"   fill="#FFD233"/>
+  <rect x="56" y="139" width="16" height="3.5" rx="1.75" fill="#FFD233"/>
+
+  <!-- Best wave info -->
+  <text x="100" y="102" font-family="'Titan One', cursive" font-size="11" fill="white"
+        opacity="0.8" letter-spacing="1">BEST WAVE REACHED</text>
+  <text x="100" y="136" font-family="'Titan One', cursive" font-size="30" fill="#FFD233"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="6" stroke-linejoin="round">Wave 100</text>
+  <text x="100" y="158" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" font-weight="700" opacity="0.85">Score: 48,200</text>
+
+  <!-- PERSONAL BESTS section label -->
+  <text x="24" y="204" font-family="'Titan One', cursive" font-size="11" fill="white"
+        letter-spacing="2" opacity="0.75">PERSONAL BESTS</text>
+
+  <!-- Row #1 — gold highlighted -->
+  <rect x="24" y="212" width="312" height="52" rx="12" fill="#FFD233" opacity="0.12" filter="url(#glow)"/>
+  <rect x="24" y="212" width="312" height="52" rx="12" fill="url(#row1-bg)"
+        stroke="#FFD233" stroke-width="2"/>
+  <!-- #1 badge — gold circle -->
+  <circle cx="52" cy="238" r="16" fill="#FFD233" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="52" cy="238" r="14" fill="#C98B34"/>
+  <text x="52" y="243" font-family="'Titan One', cursive" font-size="13" fill="white"
+        text-anchor="middle">1</text>
+  <text x="82" y="234" font-family="'Titan One', cursive" font-size="18" fill="#FFD233"
+        paint-order="stroke fill" stroke="#3a1800" stroke-width="4" stroke-linejoin="round">48,200</text>
+  <text x="82" y="252" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="#FFD233" opacity="0.9" font-weight="800">LEGEND</text>
+  <text x="218" y="236" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" font-weight="700">Wave 100</text>
+  <text x="332" y="236" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="end" opacity="0.65">Apr 3</text>
+
+  <!-- Row #2 -->
+  <rect x="24" y="272" width="312" height="46" rx="12" fill="url(#card-bg)"
+        stroke="white" stroke-width="1.5" stroke-opacity="0.4"/>
+  <circle cx="52" cy="295" r="14" fill="#1040A0" stroke="white" stroke-width="1.5"/>
+  <text x="52" y="300" font-family="'Titan One', cursive" font-size="12" fill="white" text-anchor="middle">2</text>
+  <text x="82" y="300" font-family="'Titan One', cursive" font-size="17" fill="white"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="4" stroke-linejoin="round">31,450</text>
+  <text x="218" y="297" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" opacity="0.85" font-weight="600">Wave 73</text>
+  <text x="332" y="297" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="end" opacity="0.55">Mar 28</text>
+
+  <!-- Row #3 -->
+  <rect x="24" y="326" width="312" height="46" rx="12" fill="url(#card-bg)"
+        stroke="white" stroke-width="1" stroke-opacity="0.3"/>
+  <circle cx="52" cy="349" r="14" fill="#1040A0" stroke="white" stroke-width="1" stroke-opacity="0.7"/>
+  <text x="52" y="354" font-family="'Titan One', cursive" font-size="12" fill="white" text-anchor="middle" opacity="0.9">3</text>
+  <text x="82" y="354" font-family="'Titan One', cursive" font-size="17" fill="white" opacity="0.9"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="4" stroke-linejoin="round">28,900</text>
+  <text x="218" y="351" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" opacity="0.75" font-weight="600">Wave 68</text>
+  <text x="332" y="351" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="end" opacity="0.5">Mar 22</text>
+
+  <!-- Row #4 -->
+  <rect x="24" y="380" width="312" height="46" rx="12" fill="url(#card-bg)"
+        stroke="white" stroke-width="1" stroke-opacity="0.2"/>
+  <circle cx="52" cy="403" r="14" fill="#1040A0" stroke="white" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="52" y="408" font-family="'Titan One', cursive" font-size="12" fill="white" text-anchor="middle" opacity="0.75">4</text>
+  <text x="82" y="408" font-family="'Titan One', cursive" font-size="17" fill="white" opacity="0.8"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="4" stroke-linejoin="round">19,200</text>
+  <text x="218" y="405" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" opacity="0.65" font-weight="600">Wave 51</text>
+  <text x="332" y="405" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="end" opacity="0.45">Mar 15</text>
+
+  <!-- Row #5 -->
+  <rect x="24" y="434" width="312" height="46" rx="12" fill="url(#card-bg)"
+        stroke="white" stroke-width="1" stroke-opacity="0.15"/>
+  <circle cx="52" cy="457" r="14" fill="#1040A0" stroke="white" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="52" y="462" font-family="'Titan One', cursive" font-size="12" fill="white" text-anchor="middle" opacity="0.6">5</text>
+  <text x="82" y="462" font-family="'Titan One', cursive" font-size="17" fill="white" opacity="0.65"
+        paint-order="stroke fill" stroke="#091A6A" stroke-width="4" stroke-linejoin="round">14,800</text>
+  <text x="218" y="459" font-family="'Nunito', system-ui, sans-serif" font-size="13"
+        fill="white" opacity="0.55" font-weight="600">Wave 44</text>
+  <text x="332" y="459" font-family="'Nunito', system-ui, sans-serif" font-size="11"
+        fill="white" text-anchor="end" opacity="0.38">Mar 10</text>
+
+  <!-- BADGES EARNED label -->
+  <text x="24" y="508" font-family="'Titan One', cursive" font-size="11" fill="white"
+        letter-spacing="2" opacity="0.75">BADGES EARNED</text>
+
+  <!-- Badge 1: CONTENDER — earned, gold glow -->
+  <circle cx="68" cy="560" r="38" fill="#FFD233" opacity="0.15" filter="url(#gold-glow)"/>
+  <circle cx="68" cy="560" r="34" fill="#1040A0" stroke="#FFD233" stroke-width="2.5"/>
+  <!-- Medal icon -->
+  <circle cx="68" cy="554" r="14" fill="#C98B34"/>
+  <circle cx="68" cy="554" r="9"  fill="#FFD233"/>
+  <line x1="62" y1="541" x2="59" y2="528" stroke="#C98B34" stroke-width="3" stroke-linecap="round"/>
+  <line x1="74" y1="541" x2="77" y2="528" stroke="#C98B34" stroke-width="3" stroke-linecap="round"/>
+  <text x="68" y="586" font-family="'Titan One', cursive" font-size="9" fill="#FFD233"
+        text-anchor="middle" letter-spacing="0.5">CONTENDER</text>
+
+  <!-- Badge 2: ELITE — locked, dim -->
+  <circle cx="160" cy="560" r="34" fill="#1040A0" stroke="white" stroke-width="1.5" stroke-opacity="0.3"/>
+  <rect x="153" y="554" width="14" height="12" rx="3" fill="white" opacity="0.2"/>
+  <path d="M155 554 Q155 547 160 547 Q165 547 165 554" fill="none" stroke="white"
+        stroke-width="2" opacity="0.2" stroke-linecap="round"/>
+  <text x="160" y="586" font-family="'Titan One', cursive" font-size="9" fill="white"
+        text-anchor="middle" opacity="0.35">ELITE</text>
+
+  <!-- Badge 3: MASTER — locked -->
+  <circle cx="252" cy="560" r="34" fill="#1040A0" stroke="white" stroke-width="1.5" stroke-opacity="0.22"/>
+  <rect x="245" y="554" width="14" height="12" rx="3" fill="white" opacity="0.15"/>
+  <path d="M247 554 Q247 547 252 547 Q257 547 257 554" fill="none" stroke="white"
+        stroke-width="2" opacity="0.15" stroke-linecap="round"/>
+  <text x="252" y="586" font-family="'Titan One', cursive" font-size="9" fill="white"
+        text-anchor="middle" opacity="0.3">MASTER</text>
+
+  <!-- Badge 4: LEGEND — locked -->
+  <circle cx="328" cy="560" r="28" fill="#1040A0" stroke="white" stroke-width="1" stroke-opacity="0.18"/>
+  <rect x="321" y="554" width="14" height="12" rx="3" fill="white" opacity="0.12"/>
+  <path d="M323 554 Q323 547 328 547 Q333 547 333 554" fill="none" stroke="white"
+        stroke-width="2" opacity="0.12" stroke-linecap="round"/>
+  <text x="328" y="580" font-family="'Titan One', cursive" font-size="9" fill="white"
+        text-anchor="middle" opacity="0.25">LEGEND</text>
+
+  <!-- Screen label -->
+  <text x="180" y="762" font-size="11" fill="white" text-anchor="middle" opacity="0.3"
+        font-family="'Nunito', system-ui, sans-serif">06 — HIGH SCORES</text>
+</svg>

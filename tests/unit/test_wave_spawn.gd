@@ -55,8 +55,19 @@ func test_large_wave_rows_are_split_into_active_chunk_and_reserve() -> void:
 	var board = Helpers.make_board(9, 6)
 	board.wave = 1
 	board._spawn_wave(rng)
-	assert_eq(board.grid.size(), board.current_wave_visible_rows(), "Only the visible chunk should stay active on the board")
-	assert_true(board.reserve_rows.size() > 0, "Large waves should keep additional rows in reserve instead of making them hittable off-screen")
+	var initial: int = board.initial_visible_rows()
+	assert_true(board.grid.size() >= 1 and board.grid.size() <= initial, "Active grid should be a trimmed initial chunk")
+	assert_true(
+		board.grid.size() + board.reserve_rows.size() <= BubbleBoardState.TOTAL_WAVE_DEPTH_ROWS,
+		"Full wave should not exceed TOTAL_WAVE_DEPTH_ROWS (compact_grid may trim empty rows)"
+	)
+	assert_true(board.reserve_rows.size() > 0, "Most depth should live in reserve above the visible window")
+	var top_has_bubble: bool = false
+	for col in range(board.column_count):
+		if board.grid[0][col] != BubbleBoardState.EMPTY_CELL:
+			top_has_bubble = true
+			break
+	assert_true(top_has_bubble, "First row should touch the ceiling (no leading empty rows after spawn)")
 
 
 func _largest_cluster_size(board) -> int:

@@ -70,6 +70,7 @@ var bubble_diameter: float = 64.0
 var row_height: float = 56.0
 var board_left: float = 0.0
 var board_right: float = 0.0
+## World Y of row-0 bubble tops (= centers at board_top + bubble_radius). Fixed to playfield_top after layout.
 var board_top: float = 0.0
 var playfield_top: float = 0.0
 var lose_line_y: float = 0.0
@@ -79,6 +80,10 @@ var max_rows_visible: int = 12
 var visual_time: float = 0.0
 var stack_visual_offset: float = 0.0
 var stack_settle_velocity: float = 0.0
+## Burst+compact kick: see `_start_stack_compact_kick` (SceneTree Tween — tween_method + TRANS/EASE).
+var _stack_compact_kick_tween: Tween
+const STACK_COMPACT_KICK_DOWN_SEC := 0.18
+const STACK_COMPACT_KICK_UP_SEC := 0.42
 var row_arrival_flash: float = 0.0
 var launcher_flash: float = 0.0
 var launcher_recoil: float = 0.0
@@ -284,12 +289,13 @@ func update_layout() -> void:
 	row_height = bubble_radius * 1.72
 	board_left = 0.0
 	board_right = viewport_size.x
-	playfield_top = viewport_size.y * 0.14
+	playfield_top = viewport_size.y * 0.065
 	cannon_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.86)
 	lose_line_y = cannon_position.y - bubble_radius * 2.8
 	shot_speed = bubble_radius * 63.0
-	max_rows_visible = maxi(10, int(floor((lose_line_y - playfield_top - bubble_radius) / row_height)))
 	board_top = playfield_top
+	max_rows_visible = maxi(10, int(floor((lose_line_y - playfield_top - bubble_radius) / row_height)))
+	board.set_playfield_visible_row_target(max_rows_visible)
 	if aim_target == Vector2.ZERO:
 		aim_target = cannon_position + Vector2.UP * 320.0
 	generate_ambient_stars()
@@ -316,8 +322,8 @@ func should_keep_processing_active() -> bool:
 		state == STATE_FLYING
 		or launcher_flash > 0.0
 		or launcher_recoil > 0.0
+			or _stack_compact_kick_tween_is_active()
 			or absf(stack_visual_offset) > 0.02
-			or absf(stack_settle_velocity) > 0.02
 			or row_arrival_flash > 0.0
 			or not pop_particles.is_empty()
 			or not pending_bursts.is_empty()
@@ -383,6 +389,7 @@ func start_new_game() -> void:
 	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
+	_kill_stack_compact_kick_tween()
 	stack_visual_offset = 0.0
 	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
@@ -395,7 +402,6 @@ func start_new_game() -> void:
 	last_run_personal_best = false
 	onboarding_active = not BubbleSaveManager.is_onboarding_complete()
 	onboarding_acknowledged_pop = false
-	kick_stack_drop(row_height * 0.58, true)
 	current_color = board.pick_shoot_color(rng)
 	next_color = board.pick_shoot_color(rng)
 	if onboarding_active:
@@ -421,6 +427,7 @@ func load_checkpoint_run(checkpoint: Dictionary) -> void:
 	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
+	_kill_stack_compact_kick_tween()
 	stack_visual_offset = 0.0
 	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
@@ -596,11 +603,25 @@ func finish_resolution_sequence() -> void:
 func complete_resolution_followup(resolution: Dictionary) -> void:
 	board.apply_resolution_followup(resolution, rng)
 	state = STATE_AIMING
+	board_top = playfield_top
+	_kill_stack_compact_kick_tween()
+	stack_settle_velocity = 0.0
+	var baseline_refilled: int = int(resolution.get("baseline_refilled", 0))
+	var refill_offset: float = -float(baseline_refilled) * row_height
+	if bool(resolution["board_cleared"]):
+		stack_visual_offset = 0.0
+	elif int(resolution.get("total_removed", 0)) > 0:
+		var vac_n: int = mini(int(resolution.get("vacated_full_row_count", 0)), 32)
+		if vac_n > 0:
+			_start_stack_compact_kick(float(vac_n) * row_height, refill_offset)
+		elif baseline_refilled > 0:
+			stack_visual_offset = refill_offset
+	elif baseline_refilled > 0:
+		stack_visual_offset = refill_offset
 
 	if resolution["board_cleared"]:
 		update_layout()
 		sfx.play_board_clear()
-		kick_stack_drop(row_height * 0.58, true)
 		current_color = board.pick_shoot_color(rng)
 		next_color = board.pick_shoot_color(rng)
 		if onboarding_active and not onboarding_acknowledged_pop:
@@ -613,13 +634,18 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 		queue_redraw()
 		return
 
-	if resolution.get("chunk_advanced", false):
-		var promoted_rows: int = int(resolution.get("chunk_rows_promoted", 0))
-		var reveal_strength: float = row_height * clampf(float(maxi(promoted_rows, 1)), 1.0, 3.0) * 0.9
-		kick_stack_drop(reveal_strength, false)
+	board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
+	sync_shot_planner()
 
-	if resolution["row_pushed"]:
-		kick_stack_drop(row_height * 0.92, false)
+	var shifted: int = board.try_push_shift_row()
+	if shifted > 0:
+		row_arrival_flash = 1.0
+		if not _stack_compact_kick_tween_is_active():
+			stack_visual_offset = -row_height * float(shifted)
+		board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
+		sync_shot_planner()
+
+	refresh_processing_state(true)
 
 	if check_loss_condition():
 		return
@@ -951,7 +977,7 @@ func _on_overlay_tertiary_pressed() -> void:
 
 func refresh_hud() -> void:
 	score_label.text = "Score: %d    Wave: %d" % [board.score, board.wave]
-	status_label.text = "%s  Row in %d shots." % [board.status_message, board.shots_until_shift]
+	status_label.text = board.status_message
 	pause_button.text = "Resume" if session_paused else "Pause"
 	restart_button.disabled = state == STATE_GAME_OVER
 
@@ -987,6 +1013,14 @@ func cell_to_logic_world(row: int, col: int) -> Vector2:
 	)
 
 
+## Frame + grid hints track board_top (anchor) and kick bounce only — one vertical model.
+func get_playfield_rect() -> Rect2:
+	var top: float = board_top - bubble_radius * 0.18 + stack_visual_offset
+	var height: float = lose_line_y - top
+	height = maxf(height, row_height * 0.5)
+	return Rect2(Vector2(board_left, top), Vector2(board_right - board_left, height))
+
+
 func shot_speed_multiplier(progress: float) -> float:
 	var clamped_progress: float = clampf(progress, 0.0, 1.0)
 	return lerpf(SHOT_SPEED_BURST_MULTIPLIER, SHOT_SPEED_FINISH_MULTIPLIER, pow(clamped_progress, 0.82))
@@ -1018,6 +1052,51 @@ func aim_pullback_distance() -> float:
 	return bubble_radius * (0.18 + pull_ratio * 0.62)
 
 
+func _stack_compact_kick_tween_is_active() -> bool:
+	return (
+		_stack_compact_kick_tween != null
+		and is_instance_valid(_stack_compact_kick_tween)
+		and _stack_compact_kick_tween.is_valid()
+		and _stack_compact_kick_tween.is_running()
+	)
+
+
+func _kill_stack_compact_kick_tween() -> void:
+	if _stack_compact_kick_tween != null and is_instance_valid(_stack_compact_kick_tween) and _stack_compact_kick_tween.is_valid():
+		_stack_compact_kick_tween.kill()
+	_stack_compact_kick_tween = null
+
+
+func _apply_stack_kick_visual_offset(y: float) -> void:
+	stack_visual_offset = y
+	sync_shot_planner()
+	queue_redraw()
+
+
+## Built-in SceneTree tweening: https://docs.godotengine.org/en/stable/classes/class_tween.html
+func _start_stack_compact_kick(peak: float, end_offset: float = 0.0) -> void:
+	_kill_stack_compact_kick_tween()
+	stack_settle_velocity = 0.0
+	stack_visual_offset = 0.0
+	if peak < 0.5:
+		if absf(end_offset) > 0.01:
+			stack_visual_offset = end_offset
+		return
+	_stack_compact_kick_tween = create_tween()
+	_stack_compact_kick_tween.tween_method(
+		_apply_stack_kick_visual_offset,
+		0.0,
+		peak,
+		STACK_COMPACT_KICK_DOWN_SEC
+	).set_trans(Tween.TRANS_LINEAR)
+	_stack_compact_kick_tween.tween_method(
+		_apply_stack_kick_visual_offset,
+		peak,
+		end_offset,
+		STACK_COMPACT_KICK_UP_SEC
+	).set_trans(Tween.TRANS_LINEAR)
+
+
 func clamped_aim_direction() -> Vector2:
 	var direction: Vector2 = aim_target - cannon_position
 	if direction.length_squared() < 0.0001:
@@ -1029,19 +1108,15 @@ func clamped_aim_direction() -> Vector2:
 
 func update_stack_animation(delta: float) -> bool:
 	var animated: bool = false
-	if state != STATE_FLYING and (absf(stack_visual_offset) > 0.02 or absf(stack_settle_velocity) > 0.02):
-		var spring_strength: float = 54.0 if mobile_low_fx else 38.0
-		var damping_strength: float = 13.5 if mobile_low_fx else 10.5
-		var spring_force: float = -stack_visual_offset * spring_strength
-		var damping_force: float = -stack_settle_velocity * damping_strength
-		stack_settle_velocity += (spring_force + damping_force) * delta
-		stack_visual_offset += stack_settle_velocity * delta
+	if (
+		state != STATE_FLYING
+		and not _stack_compact_kick_tween_is_active()
+		and absf(stack_visual_offset) > 0.02
+	):
+		var decay_speed: float = 180.0
+		stack_visual_offset = move_toward(stack_visual_offset, 0.0, decay_speed * delta)
+		stack_settle_velocity = 0.0
 		animated = true
-		var settle_offset_cutoff: float = 0.2 if mobile_low_fx else 0.12
-		var settle_velocity_cutoff: float = 3.0 if mobile_low_fx else 2.0
-		if absf(stack_visual_offset) < settle_offset_cutoff and absf(stack_settle_velocity) < settle_velocity_cutoff:
-			stack_visual_offset = 0.0
-			stack_settle_velocity = 0.0
 
 	if row_arrival_flash > 0.0:
 		row_arrival_flash = maxf(0.0, row_arrival_flash - delta * 2.2)
@@ -1051,46 +1126,6 @@ func update_stack_animation(delta: float) -> bool:
 		sync_shot_planner()
 
 	return animated
-
-
-func kick_stack_drop(strength: float, gentle: bool) -> void:
-	refresh_processing_state(true)
-	if mobile_low_fx:
-		var mobile_strength: float = minf(strength, row_height * 0.62)
-		stack_visual_offset = maxf(stack_visual_offset - mobile_strength, -row_height * 0.78)
-		if gentle:
-			stack_settle_velocity = minf(stack_settle_velocity, -row_height * 0.55)
-			row_arrival_flash = maxf(row_arrival_flash, 0.22)
-		else:
-			stack_settle_velocity = minf(stack_settle_velocity, -row_height * 0.78)
-			row_arrival_flash = 0.34
-			sfx.play_row_drop()
-		sync_shot_planner()
-		return
-
-	var capped_strength: float = minf(strength, row_height * 1.2)
-	stack_visual_offset = maxf(stack_visual_offset - capped_strength, -row_height * 1.35)
-	if gentle:
-		stack_settle_velocity = minf(stack_settle_velocity, -row_height * 0.8)
-		row_arrival_flash = maxf(row_arrival_flash, 0.5)
-	else:
-		stack_settle_velocity = minf(stack_settle_velocity, -row_height * 1.2)
-		row_arrival_flash = 1.0
-		sfx.play_row_drop()
-		spawn_ceiling_entry_fx()
-	sync_shot_planner()
-
-
-func spawn_ceiling_entry_fx() -> void:
-	if mobile_low_fx:
-		return
-	for col in range(GRID_COLUMNS):
-		if not cell_occupied(0, col):
-			continue
-		if rng.randf() > 0.7 and col != 0 and col != GRID_COLUMNS - 1:
-			continue
-		var center: Vector2 = cell_to_logic_world(0, col)
-		spawn_pop_burst(center, COLORS[int(grid[0][col])].lightened(0.2), 4, bubble_radius * 0.14)
 
 
 func update_particles(delta: float) -> bool:
@@ -1301,7 +1336,7 @@ func draw_playfield() -> void:
 
 	if row_arrival_flash > 0.0:
 		var entry_rect: Rect2 = Rect2(
-			Vector2(frame_rect.position.x + bubble_radius * 0.08, playfield_top - bubble_radius * 0.55 + stack_visual_offset),
+			Vector2(frame_rect.position.x + bubble_radius * 0.08, frame_rect.position.y - row_height * 0.38),
 			Vector2(frame_rect.size.x - bubble_radius * 0.16, row_height * 1.1)
 		)
 		draw_rect(entry_rect, Color(0.72, 0.97, 1.0, 0.12 * row_arrival_flash), true)
@@ -1330,9 +1365,10 @@ func draw_playfield() -> void:
 			draw_line(from_point, to_point, Color(0.8, 0.97, 1.0, 0.035), 2.0)
 
 	draw_rect(frame_rect, Color(0.56, 0.95, 0.99, 0.22), false, 3.0)
+	var ceiling_y: float = board_top + stack_visual_offset
 	draw_line(
-		Vector2(frame_rect.position.x + bubble_radius * 0.2, frame_rect.position.y + bubble_radius * 0.25),
-		Vector2(frame_rect.end.x - bubble_radius * 0.2, frame_rect.position.y + bubble_radius * 0.25),
+		Vector2(frame_rect.position.x + bubble_radius * 0.2, ceiling_y),
+		Vector2(frame_rect.end.x - bubble_radius * 0.2, ceiling_y),
 		Color(1.0, 1.0, 1.0, 0.18),
 		3.0
 	)
@@ -1571,8 +1607,3 @@ func get_bubble_texture_for_color(bubble_color: Color) -> Texture2D:
 	return BUBBLE_TEXTURES[best_index]
 
 
-func get_playfield_rect() -> Rect2:
-	return Rect2(
-		Vector2(board_left, playfield_top - bubble_radius * 0.18),
-		Vector2(board_right - board_left, lose_line_y - playfield_top + bubble_radius * 0.18)
-	)

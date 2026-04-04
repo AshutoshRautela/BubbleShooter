@@ -218,7 +218,7 @@ func find_first_path_event(start_position: Vector2, end_position: Vector2) -> Di
 			}
 
 	if movement.y < -0.0001:
-		var ceiling_y: float = board_top + bubble_radius
+		var ceiling_y: float = board_top + bubble_radius + stack_visual_offset
 		if end_position.y <= ceiling_y:
 			var ceiling_t: float = (ceiling_y - start_position.y) / movement.y
 			if ceiling_t >= 0.0 and ceiling_t <= 1.0 and ceiling_t < best_t:
