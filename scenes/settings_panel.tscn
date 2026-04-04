@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="1"]
+
+[node name="SettingsPanel" type="PanelContainer"]
+visible = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -170.0
+offset_top = -160.0
+offset_right = 170.0
+offset_bottom = 160.0
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="VBox"]
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="SfxToggle" type="CheckButton" parent="VBox"]
+text = "Sound Effects"
+
+[node name="VolumeLabel" type="Label" parent="VBox"]
+text = "SFX Volume"
+
+[node name="VolumeSlider" type="HSlider" parent="VBox"]
+max_value = 1.0
+step = 0.05
+value = 1.0
+
+[node name="VolumeValue" type="Label" parent="VBox"]
+text = "100%"
+horizontal_alignment = 1
+
+[node name="FpsToggle" type="CheckButton" parent="VBox"]
+text = "Show FPS Debug"
+
+[node name="CloseButton" type="Button" parent="VBox"]
+text = "Close"

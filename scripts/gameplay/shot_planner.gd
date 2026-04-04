@@ -31,6 +31,11 @@ func sync_layout(board_state: BubbleBoardState, layout: Dictionary) -> void:
 	stack_visual_offset = layout["stack_visual_offset"]
 
 
+func reflect_velocity_off_wall(simulated_velocity: Vector2, wall_side: String) -> Vector2:
+	var into_playfield: Vector2 = Vector2.RIGHT if wall_side == "left" else Vector2.LEFT
+	return simulated_velocity.bounce(into_playfield)
+
+
 func apply_fire_assist(direction: Vector2) -> Vector2:
 	var best_direction: Vector2 = direction
 	var best_score: float = INF
@@ -76,7 +81,7 @@ func simulate_shot_path(direction: Vector2) -> Dictionary:
 	var point: Vector2 = cannon_position
 	var simulated_velocity: Vector2 = direction * bubble_radius * 1.7
 
-	for _index in range(36):
+	for _index in range(60):
 		var next_point: Vector2 = point + simulated_velocity
 		var event: Dictionary = find_first_path_event(point, next_point)
 		if event.is_empty():
@@ -88,10 +93,7 @@ func simulate_shot_path(direction: Vector2) -> Dictionary:
 			point = event["position"]
 			var wall_side: String = event["side"]
 			bounce_sides.append(wall_side)
-			if wall_side == "left":
-				simulated_velocity.x = abs(simulated_velocity.x)
-			else:
-				simulated_velocity.x = -abs(simulated_velocity.x)
+			simulated_velocity = reflect_velocity_off_wall(simulated_velocity, wall_side)
 			point += simulated_velocity.normalized() * 0.2
 			continue
 		if event_type == "ceiling":
@@ -139,7 +141,7 @@ func trace_aim_path(direction: Vector2) -> Array[Vector2]:
 	var point: Vector2 = cannon_position
 	var simulated_velocity: Vector2 = direction * bubble_radius * 1.7
 
-	for _index in range(36):
+	for _index in range(60):
 		var next_point: Vector2 = point + simulated_velocity
 		var event: Dictionary = find_first_path_event(point, next_point)
 		if event.is_empty():
@@ -153,10 +155,7 @@ func trace_aim_path(direction: Vector2) -> Array[Vector2]:
 
 		if event_type == "wall":
 			var wall_side: String = event["side"]
-			if wall_side == "left":
-				simulated_velocity.x = abs(simulated_velocity.x)
-			else:
-				simulated_velocity.x = -abs(simulated_velocity.x)
+			simulated_velocity = reflect_velocity_off_wall(simulated_velocity, wall_side)
 			point += simulated_velocity.normalized() * 0.2
 			continue
 
@@ -165,15 +164,31 @@ func trace_aim_path(direction: Vector2) -> Array[Vector2]:
 	return points
 
 
-func first_wall_bounce_too_low(direction: Vector2) -> bool:
-	if absf(direction.x) <= 0.0001:
-		return false
-	var wall_x: float = board_left + bubble_radius if direction.x < 0.0 else board_right - bubble_radius
-	var travel_t: float = (wall_x - cannon_position.x) / direction.x
-	if travel_t <= 0.0:
-		return false
-	var wall_y: float = cannon_position.y + direction.y * travel_t
-	return wall_y > cannon_position.y - bubble_radius * 3.8
+func build_exact_path_to_target(target_position: Vector2, bounce_sides: Array[String]) -> Array[Vector2]:
+	var left_x: float = board_left + bubble_radius
+	var right_x: float = board_right - bubble_radius
+	var virtual_target: Vector2 = target_position
+
+	for index in range(bounce_sides.size() - 1, -1, -1):
+		if bounce_sides[index] == "left":
+			virtual_target.x = left_x - (virtual_target.x - left_x)
+		else:
+			virtual_target.x = right_x + (right_x - virtual_target.x)
+
+	var points: Array[Vector2] = [cannon_position]
+	var line_start: Vector2 = cannon_position
+	for side in bounce_sides:
+		var wall_x: float = left_x if side == "left" else right_x
+		var delta_x: float = virtual_target.x - line_start.x
+		if absf(delta_x) <= 0.0001:
+			break
+		var t: float = (wall_x - line_start.x) / delta_x
+		var bounce_point: Vector2 = line_start.lerp(virtual_target, t)
+		points.append(bounce_point)
+		line_start = bounce_point
+
+	points.append(target_position)
+	return points
 
 
 func find_first_path_event(start_position: Vector2, end_position: Vector2) -> Dictionary:
@@ -214,7 +229,7 @@ func find_first_path_event(start_position: Vector2, end_position: Vector2) -> Di
 					"position": start_position.lerp(end_position, ceiling_t),
 				}
 
-	var collision_radius: float = bubble_diameter - 2.0
+	var collision_radius: float = bubble_diameter
 	for row in range(board.grid.size()):
 		for col in range(board.column_count):
 			if board.grid[row][col] == BubbleBoardState.EMPTY_CELL:
@@ -339,33 +354,6 @@ func has_occupied_neighbor(row: int, col: int) -> bool:
 		if board.cell_occupied(neighbor.x, neighbor.y):
 			return true
 	return false
-
-
-func build_exact_path_to_target(target_position: Vector2, bounce_sides: Array[String]) -> Array[Vector2]:
-	var left_x: float = board_left + bubble_radius
-	var right_x: float = board_right - bubble_radius
-	var virtual_target: Vector2 = target_position
-
-	for index in range(bounce_sides.size() - 1, -1, -1):
-		if bounce_sides[index] == "left":
-			virtual_target.x = left_x - (virtual_target.x - left_x)
-		else:
-			virtual_target.x = right_x + (right_x - virtual_target.x)
-
-	var points: Array[Vector2] = [cannon_position]
-	var line_start: Vector2 = cannon_position
-	for side in bounce_sides:
-		var wall_x: float = left_x if side == "left" else right_x
-		var delta_x: float = virtual_target.x - line_start.x
-		if absf(delta_x) <= 0.0001:
-			break
-		var t: float = (wall_x - line_start.x) / delta_x
-		var bounce_point: Vector2 = line_start.lerp(virtual_target, t)
-		points.append(bounce_point)
-		line_start = bounce_point
-
-	points.append(target_position)
-	return points
 
 
 func build_bounce_indices(count: int) -> Array[int]:
