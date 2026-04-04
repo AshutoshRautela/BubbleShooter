@@ -3,8 +3,6 @@ extends Node2D
 const GRID_COLUMNS := 9
 const SHOT_SPEED_BURST_MULTIPLIER := 2.7
 const SHOT_SPEED_FINISH_MULTIPLIER := 1.15
-const MAX_PARTICLES_MOBILE := 90
-const MAX_PARTICLES_DESKTOP := 180
 const STATE_AIMING := "aiming"
 const STATE_FLYING := "flying"
 const STATE_RESOLVING := "resolving"
@@ -13,7 +11,7 @@ const OVERLAY_NONE := "none"
 const OVERLAY_PAUSE := "pause"
 const OVERLAY_GAME_OVER := "game_over"
 
-const COLORS := [
+const COLORS: Array[Color] = [
 	Color("ff6b6b"),
 	Color("ffd166"),
 	Color("4ecdc4"),
@@ -50,9 +48,10 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var wave_config: BubbleWaveConfig = BubbleWaveConfig.new(COLORS.size())
 var board: BubbleBoardState = BubbleBoardState.new(GRID_COLUMNS, COLORS.size(), wave_config)
 var shot_planner: BubbleShotPlanner = BubbleShotPlanner.new()
+var layout: BubbleGridLayout = BubbleGridLayout.new()
 var grid: Array[Array] = board.grid
 var active_bubble: Dictionary = {}
-var pop_particles: Array[Dictionary] = []
+var particle_pool: BubbleParticlePool
 var pending_bursts: Array[Dictionary] = []
 var deferred_floating_bursts: Array[Dictionary] = []
 var burst_bubbles: Array[Dictionary] = []
@@ -79,11 +78,6 @@ var shot_speed: float = 980.0
 var max_rows_visible: int = 12
 var visual_time: float = 0.0
 var stack_visual_offset: float = 0.0
-var stack_settle_velocity: float = 0.0
-## Burst+compact kick: see `_start_stack_compact_kick` (SceneTree Tween — tween_method + TRANS/EASE).
-var _stack_compact_kick_tween: Tween
-const STACK_COMPACT_KICK_DOWN_SEC := 0.18
-const STACK_COMPACT_KICK_UP_SEC := 0.42
 var row_arrival_flash: float = 0.0
 var launcher_flash: float = 0.0
 var launcher_recoil: float = 0.0
@@ -105,6 +99,7 @@ var settings: Dictionary = {}
 func _ready() -> void:
 	rng.randomize()
 	configure_runtime_profile()
+	particle_pool = BubbleParticlePool.new(rng, mobile_low_fx)
 	settings = BubbleSaveManager.load_settings()
 	pause_button.pressed.connect(toggle_pause)
 	restart_button.pressed.connect(restart_run)
@@ -141,7 +136,7 @@ func _process(delta: float) -> void:
 	if update_stack_animation(delta):
 		animating = true
 		needs_redraw = true
-	if update_particles(delta):
+	if particle_pool.update(delta):
 		animating = true
 		needs_redraw = true
 	if update_pending_bursts(delta):
@@ -298,8 +293,9 @@ func update_layout() -> void:
 	board.set_playfield_visible_row_target(max_rows_visible)
 	if aim_target == Vector2.ZERO:
 		aim_target = cannon_position + Vector2.UP * 320.0
+	sync_grid_layout()
 	generate_ambient_stars()
-	board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
+	board.sync_float_adjacency(layout)
 	sync_shot_planner()
 	queue_redraw()
 
@@ -322,10 +318,9 @@ func should_keep_processing_active() -> bool:
 		state == STATE_FLYING
 		or launcher_flash > 0.0
 		or launcher_recoil > 0.0
-			or _stack_compact_kick_tween_is_active()
-			or absf(stack_visual_offset) > 0.02
+			or absf(stack_visual_offset) > 0.4
 			or row_arrival_flash > 0.0
-			or not pop_particles.is_empty()
+			or not particle_pool.is_empty()
 			or not pending_bursts.is_empty()
 		or not deferred_floating_bursts.is_empty()
 		or not burst_bubbles.is_empty()
@@ -348,19 +343,22 @@ func start_from_launch_request() -> void:
 	start_new_game()
 
 
+func sync_grid_layout() -> void:
+	layout.board_left = board_left
+	layout.board_right = board_right
+	layout.board_top = board_top
+	layout.bubble_radius = bubble_radius
+	layout.bubble_diameter = bubble_diameter
+	layout.row_height = row_height
+	layout.max_rows_visible = max_rows_visible
+	layout.cannon_position = cannon_position
+	layout.lose_line_y = lose_line_y
+	layout.stack_visual_offset = stack_visual_offset
+
+
 func sync_shot_planner() -> void:
-	shot_planner.sync_layout(board, {
-		"board_left": board_left,
-		"board_right": board_right,
-		"board_top": board_top,
-		"bubble_radius": bubble_radius,
-		"bubble_diameter": bubble_diameter,
-		"row_height": row_height,
-		"max_rows_visible": max_rows_visible,
-		"start_rows": board.current_wave_visible_rows(),
-		"cannon_position": cannon_position,
-		"stack_visual_offset": stack_visual_offset,
-	})
+	layout.stack_visual_offset = stack_visual_offset
+	shot_planner.sync_layout(board, layout)
 
 
 func generate_ambient_stars() -> void:
@@ -384,14 +382,12 @@ func start_new_game() -> void:
 	board.start_new_game(rng)
 	update_layout()
 	active_bubble.clear()
-	pop_particles.clear()
+	particle_pool.clear()
 	pending_bursts.clear()
 	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
-	_kill_stack_compact_kick_tween()
 	stack_visual_offset = 0.0
-	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
 	session_paused = false
 	overlay_mode = OVERLAY_NONE
@@ -422,14 +418,12 @@ func load_checkpoint_run(checkpoint: Dictionary) -> void:
 	grid = board.grid
 	update_layout()
 	active_bubble.clear()
-	pop_particles.clear()
+	particle_pool.clear()
 	pending_bursts.clear()
 	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
-	_kill_stack_compact_kick_tween()
 	stack_visual_offset = 0.0
-	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
 	session_paused = false
 	overlay_mode = OVERLAY_NONE
@@ -604,20 +598,11 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 	board.apply_resolution_followup(resolution, rng)
 	state = STATE_AIMING
 	board_top = playfield_top
-	_kill_stack_compact_kick_tween()
-	stack_settle_velocity = 0.0
 	var baseline_refilled: int = int(resolution.get("baseline_refilled", 0))
-	var refill_offset: float = -float(baseline_refilled) * row_height
 	if bool(resolution["board_cleared"]):
 		stack_visual_offset = 0.0
-	elif int(resolution.get("total_removed", 0)) > 0:
-		var vac_n: int = mini(int(resolution.get("vacated_full_row_count", 0)), 32)
-		if vac_n > 0:
-			_start_stack_compact_kick(float(vac_n) * row_height, refill_offset)
-		elif baseline_refilled > 0:
-			stack_visual_offset = refill_offset
-	elif baseline_refilled > 0:
-		stack_visual_offset = refill_offset
+	else:
+		stack_visual_offset = -float(baseline_refilled) * row_height
 
 	if resolution["board_cleared"]:
 		update_layout()
@@ -634,16 +619,8 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 		queue_redraw()
 		return
 
-	board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
+	board.sync_float_adjacency(layout)
 	sync_shot_planner()
-
-	var shifted: int = board.try_push_shift_row()
-	if shifted > 0:
-		row_arrival_flash = 1.0
-		if not _stack_compact_kick_tween_is_active():
-			stack_visual_offset = -row_height * float(shifted)
-		board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
-		sync_shot_planner()
 
 	refresh_processing_state(true)
 
@@ -663,171 +640,9 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 
 
 func build_resolution_burst_phases(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> Dictionary:
-	var burst_row_parity_offset: int = resolution["burst_row_parity_offset"]
-	var cluster_entries: Array[Dictionary] = build_cluster_burst_entries(resolution["cluster_bursts"], start_cell, origin, burst_row_parity_offset)
-	var floating_entries: Array[Dictionary] = build_floating_burst_entries(resolution["floating_bursts"], origin, burst_row_parity_offset)
-	var cluster_cells: Dictionary = {}
-	for cluster_entry in cluster_entries:
-		cluster_cells[cluster_entry["cell"]] = true
-	if not cluster_cells.is_empty():
-		var filtered_floating: Array[Dictionary] = []
-		for floating_entry in floating_entries:
-			if cluster_cells.has(floating_entry["cell"]):
-				continue
-			filtered_floating.append(floating_entry)
-		floating_entries = filtered_floating
-	var cluster_step: float = 0.04 if mobile_low_fx else 0.0336
-	var floating_step: float = 0.056 if mobile_low_fx else 0.0464
-	var cluster_particle_count: int = 4 if mobile_low_fx else 6
-	var floating_particle_count: int = 3 if mobile_low_fx else 5
-
-	for cluster_entry in cluster_entries:
-		cluster_entry["particle_count"] = cluster_particle_count
-		cluster_entry["particle_scale"] = bubble_radius * 0.24
-		cluster_entry["duration"] = 0.24 if mobile_low_fx else 0.28
-		cluster_entry["glow"] = 1.5
-
-	for floating_entry in floating_entries:
-		floating_entry["particle_count"] = floating_particle_count
-		floating_entry["particle_scale"] = bubble_radius * 0.19
-		floating_entry["duration"] = 0.22 if mobile_low_fx else 0.26
-		floating_entry["glow"] = 1.22
-
-	var queued_cluster: Array[Dictionary] = []
-	for index in range(cluster_entries.size()):
-		var cluster_entry: Dictionary = cluster_entries[index]
-		cluster_entry["delay"] = float(index) * cluster_step
-		queued_cluster.append(cluster_entry)
-
-	var queued_floating: Array[Dictionary] = []
-	for index in range(floating_entries.size()):
-		var floating_entry: Dictionary = floating_entries[index]
-		floating_entry["delay"] = float(index) * floating_step
-		queued_floating.append(floating_entry)
-
-	return {
-		"cluster": queued_cluster,
-		"floating": queued_floating,
-	}
-
-
-func build_cluster_burst_entries(cluster_bursts: Array, start_cell: Vector2i, origin: Vector2, parity_offset: int) -> Array[Dictionary]:
-	var burst_by_cell: Dictionary = {}
-	for burst in cluster_bursts:
-		burst_by_cell[burst["cell"]] = burst
-
-	var ordered_cells: Array[Vector2i] = []
-	var visited: Dictionary = {}
-	var frontier: Array[Vector2i] = []
-	if burst_by_cell.has(start_cell):
-		frontier.append(start_cell)
-		visited[start_cell] = true
-
-	while not frontier.is_empty():
-		var cell: Vector2i = frontier.pop_front()
-		ordered_cells.append(cell)
-		for neighbor in board.get_neighbors(cell.x, cell.y):
-			if not burst_by_cell.has(neighbor) or visited.has(neighbor):
-				continue
-			visited[neighbor] = true
-			frontier.append(neighbor)
-
-	if ordered_cells.size() < cluster_bursts.size():
-		var remaining_entries: Array[Dictionary] = []
-		for burst in cluster_bursts:
-			var cluster_cell: Vector2i = burst["cell"]
-			if visited.has(cluster_cell):
-				continue
-			var cluster_center: Vector2 = cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset)
-			remaining_entries.append({
-				"cell": cluster_cell,
-				"sort_key": cluster_center.distance_squared_to(origin),
-			})
-		remaining_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return float(a["sort_key"]) < float(b["sort_key"])
-		)
-		for entry in remaining_entries:
-			ordered_cells.append(entry["cell"])
-
-	var ordered_entries: Array[Dictionary] = []
-	for cluster_cell in ordered_cells:
-			var burst: Dictionary = burst_by_cell[cluster_cell]
-			var cluster_color: int = burst["color"]
-			ordered_entries.append({
-				"cell": cluster_cell,
-				"center": cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset),
-				"color": COLORS[cluster_color],
-				"burst_kind": "cluster",
-			})
-
-	return ordered_entries
-
-
-func build_floating_burst_entries(floating_bursts: Array, origin: Vector2, parity_offset: int) -> Array[Dictionary]:
-	var burst_by_cell: Dictionary = {}
-	for burst in floating_bursts:
-		burst_by_cell[burst["cell"]] = burst
-
-	var components: Array[Dictionary] = []
-	var visited: Dictionary = {}
-	for burst in floating_bursts:
-		var start_cell: Vector2i = burst["cell"]
-		if visited.has(start_cell):
-			continue
-		var component_cells: Array[Vector2i] = []
-		var frontier: Array[Vector2i] = [start_cell]
-		visited[start_cell] = true
-		while not frontier.is_empty():
-			var cell: Vector2i = frontier.pop_front()
-			component_cells.append(cell)
-			for neighbor in board.get_neighbors(cell.x, cell.y):
-				if not burst_by_cell.has(neighbor) or visited.has(neighbor):
-					continue
-				visited[neighbor] = true
-				frontier.append(neighbor)
-
-		var seed_cell: Vector2i = component_cells[0]
-		var seed_distance: float = cell_to_world_with_parity(seed_cell.x, seed_cell.y, parity_offset).distance_squared_to(origin)
-		for cell in component_cells:
-			var cell_distance: float = cell_to_world_with_parity(cell.x, cell.y, parity_offset).distance_squared_to(origin)
-			if cell_distance < seed_distance:
-				seed_cell = cell
-				seed_distance = cell_distance
-		components.append({
-			"seed_cell": seed_cell,
-			"seed_distance": seed_distance,
-			"cells": component_cells,
-		})
-
-	components.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a["seed_distance"]) < float(b["seed_distance"])
+	return BubbleBurstPhaseBuilder.build_phases(
+		resolution, start_cell, origin, board, layout, COLORS, bubble_radius, mobile_low_fx
 	)
-
-	var ordered_entries: Array[Dictionary] = []
-	for component in components:
-		var seed_cell: Vector2i = component["seed_cell"]
-		var component_cells: Array[Vector2i] = component["cells"]
-		var component_lookup: Dictionary = {}
-		for cell in component_cells:
-			component_lookup[cell] = true
-		var component_visited: Dictionary = {seed_cell: true}
-		var frontier: Array[Vector2i] = [seed_cell]
-		while not frontier.is_empty():
-			var cell: Vector2i = frontier.pop_front()
-			var burst: Dictionary = burst_by_cell[cell]
-			ordered_entries.append({
-				"cell": cell,
-				"center": cell_to_world_with_parity(cell.x, cell.y, parity_offset),
-				"color": COLORS[int(burst["color"])].darkened(0.05),
-				"burst_kind": "floating",
-			})
-			for neighbor in board.get_neighbors(cell.x, cell.y):
-				if not component_lookup.has(neighbor) or component_visited.has(neighbor):
-					continue
-				component_visited[neighbor] = true
-				frontier.append(neighbor)
-
-	return ordered_entries
 
 
 func check_loss_condition() -> bool:
@@ -996,29 +811,19 @@ func cell_occupied(row: int, col: int) -> bool:
 
 
 func cell_to_world(row: int, col: int) -> Vector2:
-	return cell_to_world_with_parity(row, col, board.row_parity_offset)
+	return layout.cell_center(row, col, board.row_parity_offset)
 
 
 func cell_to_world_with_parity(row: int, col: int, parity_offset: int) -> Vector2:
-	return Vector2(
-		board_left + bubble_radius + float(col) * bubble_diameter + float((row + parity_offset) % 2) * bubble_radius,
-		board_top + bubble_radius + float(row) * row_height + stack_visual_offset
-	)
+	return layout.cell_center(row, col, parity_offset)
 
 
 func cell_to_logic_world(row: int, col: int) -> Vector2:
-	return Vector2(
-		board_left + bubble_radius + float(col) * bubble_diameter + float(row_shift_parity(row)) * bubble_radius,
-		board_top + bubble_radius + float(row) * row_height
-	)
+	return layout.cell_center_static(row, col, board.row_parity_offset)
 
 
-## Frame + grid hints track board_top (anchor) and kick bounce only — one vertical model.
 func get_playfield_rect() -> Rect2:
-	var top: float = board_top - bubble_radius * 0.18 + stack_visual_offset
-	var height: float = lose_line_y - top
-	height = maxf(height, row_height * 0.5)
-	return Rect2(Vector2(board_left, top), Vector2(board_right - board_left, height))
+	return layout.playfield_rect()
 
 
 func shot_speed_multiplier(progress: float) -> float:
@@ -1052,50 +857,6 @@ func aim_pullback_distance() -> float:
 	return bubble_radius * (0.18 + pull_ratio * 0.62)
 
 
-func _stack_compact_kick_tween_is_active() -> bool:
-	return (
-		_stack_compact_kick_tween != null
-		and is_instance_valid(_stack_compact_kick_tween)
-		and _stack_compact_kick_tween.is_valid()
-		and _stack_compact_kick_tween.is_running()
-	)
-
-
-func _kill_stack_compact_kick_tween() -> void:
-	if _stack_compact_kick_tween != null and is_instance_valid(_stack_compact_kick_tween) and _stack_compact_kick_tween.is_valid():
-		_stack_compact_kick_tween.kill()
-	_stack_compact_kick_tween = null
-
-
-func _apply_stack_kick_visual_offset(y: float) -> void:
-	stack_visual_offset = y
-	sync_shot_planner()
-	queue_redraw()
-
-
-## Built-in SceneTree tweening: https://docs.godotengine.org/en/stable/classes/class_tween.html
-func _start_stack_compact_kick(peak: float, end_offset: float = 0.0) -> void:
-	_kill_stack_compact_kick_tween()
-	stack_settle_velocity = 0.0
-	stack_visual_offset = 0.0
-	if peak < 0.5:
-		if absf(end_offset) > 0.01:
-			stack_visual_offset = end_offset
-		return
-	_stack_compact_kick_tween = create_tween()
-	_stack_compact_kick_tween.tween_method(
-		_apply_stack_kick_visual_offset,
-		0.0,
-		peak,
-		STACK_COMPACT_KICK_DOWN_SEC
-	).set_trans(Tween.TRANS_LINEAR)
-	_stack_compact_kick_tween.tween_method(
-		_apply_stack_kick_visual_offset,
-		peak,
-		end_offset,
-		STACK_COMPACT_KICK_UP_SEC
-	).set_trans(Tween.TRANS_LINEAR)
-
 
 func clamped_aim_direction() -> Vector2:
 	var direction: Vector2 = aim_target - cannon_position
@@ -1108,14 +869,10 @@ func clamped_aim_direction() -> Vector2:
 
 func update_stack_animation(delta: float) -> bool:
 	var animated: bool = false
-	if (
-		state != STATE_FLYING
-		and not _stack_compact_kick_tween_is_active()
-		and absf(stack_visual_offset) > 0.02
-	):
-		var decay_speed: float = 180.0
-		stack_visual_offset = move_toward(stack_visual_offset, 0.0, decay_speed * delta)
-		stack_settle_velocity = 0.0
+	if state != STATE_FLYING and absf(stack_visual_offset) > 0.4:
+		stack_visual_offset *= exp(-8.0 * delta)
+		if absf(stack_visual_offset) <= 0.4:
+			stack_visual_offset = 0.0
 		animated = true
 
 	if row_arrival_flash > 0.0:
@@ -1128,31 +885,6 @@ func update_stack_animation(delta: float) -> bool:
 	return animated
 
 
-func update_particles(delta: float) -> bool:
-	if pop_particles.is_empty():
-		return false
-
-	var write_index: int = 0
-	for read_index in range(pop_particles.size()):
-		var particle: Dictionary = pop_particles[read_index]
-		var remaining: float = particle["life"] - delta
-		if remaining <= 0.0:
-			continue
-		var position: Vector2 = particle["position"]
-		var velocity: Vector2 = particle["velocity"]
-		position += velocity * delta
-		velocity *= 0.96
-		velocity.y += 320.0 * delta
-		particle["life"] = remaining
-		particle["position"] = position
-		particle["velocity"] = velocity
-		pop_particles[write_index] = particle
-		write_index += 1
-
-	if write_index != pop_particles.size():
-		pop_particles.resize(write_index)
-
-	return not pop_particles.is_empty()
 
 
 func update_pending_bursts(delta: float) -> bool:
@@ -1234,45 +966,15 @@ func trigger_pop_haptic() -> void:
 
 
 func spawn_stack_impact_sparks(center: Vector2, bubble_color: Color) -> void:
-	var spark_count: int = 10 if mobile_low_fx else 16
-	for index in range(spark_count):
-		var angle: float = TAU * float(index) / float(spark_count) + rng.randf_range(-0.22, 0.22)
-		var push: Vector2 = Vector2.RIGHT.rotated(angle) * rng.randf_range(120.0, 220.0)
-		spawn_spark(center + push.normalized() * bubble_radius * 0.14, bubble_color.lightened(0.18), push)
+	particle_pool.spawn_impact_sparks(center, bubble_color, bubble_radius)
 
 
 func spawn_pop_burst(center: Vector2, bubble_color: Color, count: int, size_scale: float) -> void:
-	var limit: int = MAX_PARTICLES_MOBILE if mobile_low_fx else MAX_PARTICLES_DESKTOP
-	for _index in range(count):
-		if pop_particles.size() >= limit:
-			break
-		var angle: float = rng.randf_range(0.0, TAU)
-		var speed: float = rng.randf_range(bubble_radius * 3.6, bubble_radius * 7.4)
-		var life: float = rng.randf_range(0.22, 0.5)
-		var particle_color: Color = bubble_color.lerp(Color(1.0, 1.0, 1.0, 1.0), rng.randf_range(0.1, 0.35))
-		pop_particles.append({
-			"position": center,
-			"velocity": Vector2.RIGHT.rotated(angle) * speed,
-			"life": life,
-			"max_life": life,
-			"size": size_scale * rng.randf_range(0.8, 1.5),
-			"color": particle_color,
-		})
+	particle_pool.spawn_burst(center, bubble_color, count, size_scale, bubble_radius)
 
 
 func spawn_spark(center: Vector2, spark_color: Color, push: Vector2) -> void:
-	var limit: int = MAX_PARTICLES_MOBILE if mobile_low_fx else MAX_PARTICLES_DESKTOP
-	if pop_particles.size() >= limit:
-		return
-	var particle_color: Color = spark_color.lerp(Color(1.0, 1.0, 1.0, 1.0), 0.4)
-	pop_particles.append({
-		"position": center,
-		"velocity": push + Vector2(rng.randf_range(-50.0, 50.0), rng.randf_range(-80.0, 40.0)),
-		"life": 0.16,
-		"max_life": 0.16,
-		"size": bubble_radius * 0.16,
-		"color": particle_color,
-	})
+	particle_pool.spawn_spark(center, spark_color, push, bubble_radius)
 
 
 func draw_background_accents() -> void:
@@ -1422,7 +1124,7 @@ func draw_bubbles() -> void:
 
 
 func draw_particles() -> void:
-	for particle in pop_particles:
+	for particle in particle_pool.particles:
 		var color: Color = particle["color"]
 		var remaining: float = particle["life"]
 		var max_life: float = particle["max_life"]
@@ -1605,5 +1307,3 @@ func get_bubble_texture_for_color(bubble_color: Color) -> Texture2D:
 			best_distance = distance
 			best_index = index
 	return BUBBLE_TEXTURES[best_index]
-
-

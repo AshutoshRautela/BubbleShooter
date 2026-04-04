@@ -36,21 +36,16 @@ static func occupied_cells(board: BubbleBoardState) -> Array[String]:
 
 static func make_shot_planner(board: BubbleBoardState, layout_overrides: Dictionary = {}) -> BubbleShotPlanner:
 	var planner: BubbleShotPlanner = BubbleShotPlanner.new()
+	var gl: BubbleGridLayout = BubbleGridLayout.new()
 	var bubble_radius: float = float(layout_overrides.get("bubble_radius", 20.0))
-	var bubble_diameter: float = bubble_radius * 2.0
-	var defaults: Dictionary = {
-		"board_left": 100.0,
-		"board_right": 100.0 + bubble_diameter * float(board.column_count) + bubble_radius,
-		"board_top": 120.0,
-		"bubble_radius": bubble_radius,
-		"bubble_diameter": bubble_diameter,
-		"row_height": float(layout_overrides.get("row_height", bubble_radius * 1.72)),
-		"max_rows_visible": int(layout_overrides.get("max_rows_visible", 12)),
-		"start_rows": int(layout_overrides.get("start_rows", board.current_wave_visible_rows())),
-		"cannon_position": layout_overrides.get("cannon_position", Vector2(290.0, 620.0)),
-		"stack_visual_offset": float(layout_overrides.get("stack_visual_offset", 0.0)),
-	}
-	for key in layout_overrides.keys():
-		defaults[key] = layout_overrides[key]
-	planner.sync_layout(board, defaults)
+	gl.bubble_radius = bubble_radius
+	gl.bubble_diameter = bubble_radius * 2.0
+	gl.board_left = float(layout_overrides.get("board_left", 100.0))
+	gl.board_right = float(layout_overrides.get("board_right", gl.board_left + gl.bubble_diameter * float(board.column_count) + bubble_radius))
+	gl.board_top = float(layout_overrides.get("board_top", 120.0))
+	gl.row_height = float(layout_overrides.get("row_height", bubble_radius * 1.72))
+	gl.max_rows_visible = int(layout_overrides.get("max_rows_visible", 12))
+	gl.cannon_position = layout_overrides.get("cannon_position", Vector2(290.0, 620.0))
+	gl.stack_visual_offset = float(layout_overrides.get("stack_visual_offset", 0.0))
+	planner.sync_layout(board, gl)
 	return planner

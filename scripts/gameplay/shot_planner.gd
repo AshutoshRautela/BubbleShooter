@@ -5,30 +5,32 @@ const FIRE_ASSIST_MAX_ANGLE := 0.028
 const FIRE_ASSIST_STEP_ANGLE := 0.007
 
 var board: BubbleBoardState
-var board_left: float = 0.0
-var board_right: float = 0.0
-var board_top: float = 0.0
-var bubble_radius: float = 32.0
-var bubble_diameter: float = 64.0
-var row_height: float = 56.0
-var max_rows_visible: int = 12
+var grid_layout: BubbleGridLayout
+var board_left: float:
+	get: return grid_layout.board_left if grid_layout else 0.0
+var board_right: float:
+	get: return grid_layout.board_right if grid_layout else 0.0
+var board_top: float:
+	get: return grid_layout.board_top if grid_layout else 0.0
+var bubble_radius: float:
+	get: return grid_layout.bubble_radius if grid_layout else 32.0
+var bubble_diameter: float:
+	get: return grid_layout.bubble_diameter if grid_layout else 64.0
+var row_height: float:
+	get: return grid_layout.row_height if grid_layout else 56.0
+var max_rows_visible: int:
+	get: return grid_layout.max_rows_visible if grid_layout else 12
+var cannon_position: Vector2:
+	get: return grid_layout.cannon_position if grid_layout else Vector2.ZERO
+var stack_visual_offset: float:
+	get: return grid_layout.stack_visual_offset if grid_layout else 0.0
 var start_rows: int = 6
-var cannon_position: Vector2 = Vector2.ZERO
-var stack_visual_offset: float = 0.0
 
 
-func sync_layout(board_state: BubbleBoardState, layout: Dictionary) -> void:
+func sync_layout(board_state: BubbleBoardState, layout: BubbleGridLayout) -> void:
 	board = board_state
-	board_left = layout["board_left"]
-	board_right = layout["board_right"]
-	board_top = layout["board_top"]
-	bubble_radius = layout["bubble_radius"]
-	bubble_diameter = layout["bubble_diameter"]
-	row_height = layout["row_height"]
-	max_rows_visible = layout["max_rows_visible"]
-	start_rows = layout["start_rows"]
-	cannon_position = layout["cannon_position"]
-	stack_visual_offset = layout["stack_visual_offset"]
+	grid_layout = layout
+	start_rows = board.current_wave_visible_rows()
 
 
 func reflect_velocity_off_wall(simulated_velocity: Vector2, wall_side: String) -> Vector2:
@@ -364,7 +366,4 @@ func build_bounce_indices(count: int) -> Array[int]:
 
 
 func cell_to_world(row: int, col: int) -> Vector2:
-	return Vector2(
-		board_left + bubble_radius + float(col) * bubble_diameter + float(board.row_shift_parity(row)) * bubble_radius,
-		board_top + bubble_radius + float(row) * row_height + stack_visual_offset
-	)
+	return grid_layout.cell_center(row, col, board.row_parity_offset)

@@ -2,6 +2,7 @@ class_name BubbleBoardState
 extends RefCounted
 
 const _Hex := preload("res://scripts/gameplay/hex_grid.gd")
+const _GridLayout := preload("res://scripts/gameplay/grid_layout.gd")
 const EMPTY_CELL := -1
 ## Full wave stack height (hidden rows above + visible window). Not every row must be dense.
 const TOTAL_WAVE_DEPTH_ROWS := 100
@@ -21,11 +22,7 @@ var status_message: String = ""
 ## How many rows we keep in `grid` (visible window). Set from `game.update_layout` via `max_rows_visible`.
 var playfield_visible_row_target: int = 12
 
-var _float_adj_board_left: float = 0.0
-var _float_adj_board_top: float = 0.0
-var _float_adj_bubble_radius: float = 32.0
-var _float_adj_bubble_diameter: float = 64.0
-var _float_adj_row_height: float = 56.0
+var _float_layout: _GridLayout
 var _float_adjacency_ready: bool = false
 
 ## Filled only during `resolve_placed_bubble`: grid row indices that were 100% empty right before a
@@ -276,13 +273,9 @@ func row_shift_parity(row: int) -> int:
 func get_neighbors(row: int, col: int) -> Array[Vector2i]:
 	return _Hex.neighbors(row, col, row_parity_offset, column_count, true, grid.size())
 
-func sync_float_adjacency(board_left: float, board_top: float, bubble_radius: float, bubble_diameter: float, row_height: float) -> void:
-	_float_adj_board_left = board_left
-	_float_adj_board_top = board_top
-	_float_adj_bubble_radius = maxf(bubble_radius, 0.001)
-	_float_adj_bubble_diameter = maxf(bubble_diameter, 0.001)
-	_float_adj_row_height = maxf(row_height, 0.001)
-	_float_adjacency_ready = true
+func sync_float_adjacency(grid_layout: _GridLayout) -> void:
+	_float_layout = grid_layout
+	_float_adjacency_ready = _float_layout != null
 
 
 # ---------------------------------------------------------------------------
@@ -450,18 +443,14 @@ func remove_floating_bubbles() -> Array[Dictionary]:
 # ---------------------------------------------------------------------------
 
 func _float_world_center(row: int, col: int) -> Vector2:
-	var shift: float = float(row_shift_parity(row)) * _float_adj_bubble_radius
-	return Vector2(
-		_float_adj_board_left + _float_adj_bubble_radius + float(col) * _float_adj_bubble_diameter + shift,
-		_float_adj_board_top + _float_adj_bubble_radius + float(row) * _float_adj_row_height
-	)
+	return _float_layout.cell_center_static(row, col, row_parity_offset)
 
 func _build_float_support_graph(occupied_cells: Array[Vector2i]) -> Dictionary:
 	var adj: Dictionary = {}
 	for cell in occupied_cells:
 		adj[cell] = []
 	if _float_adjacency_ready:
-		var limit: float = _float_adj_bubble_diameter * 1.02
+		var limit: float = _float_layout.bubble_diameter * 1.02
 		for ia in range(occupied_cells.size()):
 			var a: Vector2i = occupied_cells[ia]
 			var pa: Vector2 = _float_world_center(a.x, a.y)
