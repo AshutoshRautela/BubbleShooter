@@ -25,6 +25,8 @@ var last_pop_ms: int = -1000
 var last_floating_ms: int = -1000
 var next_pop_player_index: int = 0
 var next_pop_stream_index: int = 0
+var sfx_enabled: bool = true
+var volume_offset_db: float = 0.0
 
 
 func _ready() -> void:
@@ -102,6 +104,15 @@ func play_game_over() -> void:
 	_play(event_player, game_over_stream, -10.5, 1.0)
 
 
+func apply_settings(settings: Dictionary) -> void:
+	sfx_enabled = bool(settings.get("sfx_enabled", true))
+	var linear_volume: float = clampf(float(settings.get("sfx_volume", 1.0)), 0.0, 1.0)
+	if linear_volume <= 0.001:
+		volume_offset_db = -80.0
+	else:
+		volume_offset_db = linear_to_db(linear_volume)
+
+
 func _next_pop_player() -> AudioStreamPlayer:
 	var player: AudioStreamPlayer = pop_players[next_pop_player_index]
 	next_pop_player_index = (next_pop_player_index + 1) % pop_players.size()
@@ -115,8 +126,10 @@ func _next_pop_stream() -> AudioStream:
 
 
 func _play(player: AudioStreamPlayer, stream: AudioStream, volume_db: float, pitch_scale: float) -> void:
+	if not sfx_enabled:
+		return
 	player.stream = stream
-	player.volume_db = volume_db
+	player.volume_db = volume_db + volume_offset_db
 	player.pitch_scale = pitch_scale
 	player.play()
 

@@ -1,21 +1,17 @@
 extends Node2D
 
-const BubbleBoardState = preload("res://scripts/board_state.gd")
-const BubbleShotPlanner = preload("res://scripts/shot_planner.gd")
-const BubbleSfxController = preload("res://scripts/sfx_controller.gd")
-
 const GRID_COLUMNS := 9
-const START_ROWS := 6
-const SHOTS_PER_SHIFT := 5
 const SHOT_SPEED_BURST_MULTIPLIER := 2.7
 const SHOT_SPEED_FINISH_MULTIPLIER := 1.15
-const MAX_HIT_WAVES := 6
 const MAX_PARTICLES_MOBILE := 90
 const MAX_PARTICLES_DESKTOP := 180
 const STATE_AIMING := "aiming"
 const STATE_FLYING := "flying"
 const STATE_RESOLVING := "resolving"
 const STATE_GAME_OVER := "game_over"
+const OVERLAY_NONE := "none"
+const OVERLAY_PAUSE := "pause"
+const OVERLAY_GAME_OVER := "game_over"
 
 const COLORS := [
 	Color("ff6b6b"),
@@ -25,28 +21,40 @@ const COLORS := [
 	Color("a78bfa"),
 	Color("95e06c"),
 ]
+const BUBBLE_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/bubbles/png/bubble_red_256px.png"),
+	preload("res://assets/bubbles/png/bubble_yellow_256px.png"),
+	preload("res://assets/bubbles/png/bubble_teal_256px.png"),
+	preload("res://assets/bubbles/png/bubble_blue_256px.png"),
+	preload("res://assets/bubbles/png/bubble_purple_256px.png"),
+	preload("res://assets/bubbles/png/bubble_green_256px.png"),
+]
 
 @onready var hud_panel: PanelContainer = $UI/Hud/Panel
 @onready var title_label: Label = $UI/Hud/Panel/VBox/TitleLabel
 @onready var score_label: Label = $UI/Hud/Panel/VBox/ScoreLabel
 @onready var status_label: Label = $UI/Hud/Panel/VBox/StatusLabel
 @onready var fps_label: Label = $UI/Hud/Panel/VBox/FpsLabel
-@onready var restart_button: Button = $UI/Hud/Panel/VBox/RestartButton
+@onready var pause_button: Button = $UI/Hud/Panel/VBox/ActionRow/PauseButton
+@onready var restart_button: Button = $UI/Hud/Panel/VBox/ActionRow/RestartButton
 @onready var overlay: CenterContainer = $UI/Overlay
 @onready var overlay_panel: PanelContainer = $UI/Overlay/Panel
 @onready var overlay_title: Label = $UI/Overlay/Panel/VBox/OverlayTitle
 @onready var overlay_message: Label = $UI/Overlay/Panel/VBox/OverlayMessage
-@onready var overlay_button: Button = $UI/Overlay/Panel/VBox/OverlayButton
+@onready var overlay_primary_button: Button = $UI/Overlay/Panel/VBox/OverlayPrimaryButton
+@onready var overlay_secondary_button: Button = $UI/Overlay/Panel/VBox/OverlaySecondaryButton
+@onready var overlay_tertiary_button: Button = $UI/Overlay/Panel/VBox/OverlayTertiaryButton
 @onready var sfx: BubbleSfxController = $Sfx
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-var board: BubbleBoardState = BubbleBoardState.new(GRID_COLUMNS, START_ROWS, SHOTS_PER_SHIFT, COLORS.size())
+var wave_config: BubbleWaveConfig = BubbleWaveConfig.new(COLORS.size())
+var board: BubbleBoardState = BubbleBoardState.new(GRID_COLUMNS, COLORS.size(), wave_config)
 var shot_planner: BubbleShotPlanner = BubbleShotPlanner.new()
 var grid: Array[Array] = board.grid
 var active_bubble: Dictionary = {}
 var pop_particles: Array[Dictionary] = []
-var hit_waves: Array[Dictionary] = []
 var pending_bursts: Array[Dictionary] = []
+var deferred_floating_bursts: Array[Dictionary] = []
 var burst_bubbles: Array[Dictionary] = []
 var pending_resolution: Dictionary = {}
 var ambient_stars: Array[Dictionary] = []
@@ -63,6 +71,7 @@ var row_height: float = 56.0
 var board_left: float = 0.0
 var board_right: float = 0.0
 var board_top: float = 0.0
+var playfield_top: float = 0.0
 var lose_line_y: float = 0.0
 var cannon_position: Vector2 = Vector2.ZERO
 var shot_speed: float = 980.0
@@ -77,24 +86,39 @@ var mobile_low_fx: bool = false
 var touch_aim_active: bool = false
 var fps_update_timer: float = 0.0
 var smoothed_frame_ms: float = 16.0
-var wave_transform_offset: Vector2 = Vector2.ZERO
-var wave_transform_scale: float = 1.0
-var wave_transform_glow: float = 0.0
 var last_pop_haptic_ms: int = -1000
+var session_paused: bool = false
+var overlay_mode: String = OVERLAY_NONE
+var onboarding_active: bool = false
+var onboarding_acknowledged_pop: bool = false
+var game_over_recorded: bool = false
+var last_run_rank: int = -1
+var last_run_personal_best: bool = false
+var settings: Dictionary = {}
 
 
 func _ready() -> void:
 	rng.randomize()
 	configure_runtime_profile()
-	restart_button.pressed.connect(start_new_game)
-	overlay_button.pressed.connect(start_new_game)
+	settings = BubbleSaveManager.load_settings()
+	pause_button.pressed.connect(toggle_pause)
+	restart_button.pressed.connect(restart_run)
+	overlay_primary_button.pressed.connect(_on_overlay_primary_pressed)
+	overlay_secondary_button.pressed.connect(_on_overlay_secondary_pressed)
+	overlay_tertiary_button.pressed.connect(_on_overlay_tertiary_pressed)
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	style_ui()
+	apply_runtime_settings()
 	update_layout()
-	start_new_game()
+	start_from_launch_request()
+	refresh_processing_state()
 
 
 func _process(delta: float) -> void:
+	if session_paused:
+		update_fps_display(delta)
+		refresh_processing_state()
+		return
 	var needs_redraw: bool = false
 	var animating: bool = false
 	if state == STATE_FLYING:
@@ -115,13 +139,13 @@ func _process(delta: float) -> void:
 	if update_particles(delta):
 		animating = true
 		needs_redraw = true
-	if update_hit_waves(delta):
-		animating = true
-		needs_redraw = true
 	if update_pending_bursts(delta):
 		animating = true
 		needs_redraw = true
 	if update_burst_bubbles(delta):
+		animating = true
+		needs_redraw = true
+	if try_start_deferred_floating_phase():
 		animating = true
 		needs_redraw = true
 	if state == STATE_RESOLVING and pending_bursts.is_empty() and burst_bubbles.is_empty():
@@ -139,6 +163,7 @@ func _process(delta: float) -> void:
 		visual_time += delta
 	if needs_redraw:
 		queue_redraw()
+	refresh_processing_state()
 
 
 func _draw() -> void:
@@ -153,6 +178,12 @@ func _draw() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		handle_back_request()
+		get_viewport().set_input_as_handled()
+		return
+	if session_paused or overlay_mode == OVERLAY_GAME_OVER:
+		return
 	if event is InputEventMouseMotion and not mobile_low_fx:
 		aim_target = event.position
 		if state == STATE_AIMING:
@@ -190,6 +221,8 @@ func configure_runtime_profile() -> void:
 
 
 func update_fps_display(delta: float) -> void:
+	if not fps_label.visible:
+		return
 	smoothed_frame_ms = lerpf(smoothed_frame_ms, delta * 1000.0, 0.12)
 	fps_update_timer += delta
 	if fps_update_timer < 0.2:
@@ -200,42 +233,24 @@ func update_fps_display(delta: float) -> void:
 
 
 func style_ui() -> void:
-	var panel_style: StyleBoxFlat = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.03, 0.11, 0.17, 0.82)
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.55, 0.93, 0.99, 0.24)
-	panel_style.corner_radius_top_left = 24
-	panel_style.corner_radius_top_right = 24
-	panel_style.corner_radius_bottom_right = 24
-	panel_style.corner_radius_bottom_left = 24
-	panel_style.shadow_color = Color(0.0, 0.0, 0.0, 0.28)
-	panel_style.shadow_size = 16
-	panel_style.content_margin_left = 18
-	panel_style.content_margin_top = 16
-	panel_style.content_margin_right = 18
-	panel_style.content_margin_bottom = 16
+	var panel_style: StyleBoxFlat = BubbleUiTheme.make_panel_style(
+		Color(0.03, 0.11, 0.17, 0.82),
+		Color(0.55, 0.93, 0.99, 0.24),
+		24,
+		Color(0.0, 0.0, 0.0, 0.28),
+		16,
+		{"left": 18.0, "top": 16.0, "right": 18.0, "bottom": 16.0}
+	)
 	hud_panel.add_theme_stylebox_override("panel", panel_style)
 
-	var overlay_style: StyleBoxFlat = StyleBoxFlat.new()
-	overlay_style.bg_color = Color(0.02, 0.08, 0.12, 0.92)
-	overlay_style.border_width_left = 2
-	overlay_style.border_width_top = 2
-	overlay_style.border_width_right = 2
-	overlay_style.border_width_bottom = 2
-	overlay_style.border_color = Color(1.0, 0.86, 0.58, 0.28)
-	overlay_style.corner_radius_top_left = 28
-	overlay_style.corner_radius_top_right = 28
-	overlay_style.corner_radius_bottom_right = 28
-	overlay_style.corner_radius_bottom_left = 28
-	overlay_style.shadow_color = Color(0.0, 0.0, 0.0, 0.34)
-	overlay_style.shadow_size = 22
-	overlay_style.content_margin_left = 24
-	overlay_style.content_margin_top = 22
-	overlay_style.content_margin_right = 24
-	overlay_style.content_margin_bottom = 22
+	var overlay_style: StyleBoxFlat = BubbleUiTheme.make_panel_style(
+		Color(0.02, 0.08, 0.12, 0.92),
+		Color(1.0, 0.86, 0.58, 0.28),
+		28,
+		Color(0.0, 0.0, 0.0, 0.34),
+		22,
+		{"left": 24.0, "top": 22.0, "right": 24.0, "bottom": 22.0}
+	)
 	overlay_panel.add_theme_stylebox_override("panel", overlay_style)
 
 	title_label.add_theme_font_size_override("font_size", 28)
@@ -251,63 +266,80 @@ func style_ui() -> void:
 	overlay_message.add_theme_font_size_override("font_size", 18)
 	overlay_message.add_theme_color_override("font_color", Color("d5f7ff"))
 
+	style_button(pause_button, Color("204458"), Color("2c6077"), Color("3e7f93"))
 	style_button(restart_button, Color("0f3647"), Color("1d5c74"), Color("1d8192"))
-	style_button(overlay_button, Color("5f4520"), Color("845e26"), Color("c98b34"))
+	style_button(overlay_primary_button, Color("5f4520"), Color("845e26"), Color("c98b34"))
+	style_button(overlay_secondary_button, Color("153a4d"), Color("21526a"), Color("2b6782"))
+	style_button(overlay_tertiary_button, Color("2d3138"), Color("404754"), Color("535d70"))
 
 
 func style_button(button: Button, base_color: Color, hover_color: Color, pressed_color: Color) -> void:
-	var normal: StyleBoxFlat = make_button_style(base_color)
-	var hover: StyleBoxFlat = make_button_style(hover_color)
-	var pressed: StyleBoxFlat = make_button_style(pressed_color)
-	button.add_theme_stylebox_override("normal", normal)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("focus", hover)
-	button.add_theme_color_override("font_color", Color("f7fbff"))
-	button.add_theme_font_size_override("font_size", 17)
-	button.custom_minimum_size = Vector2(0.0, 46.0)
-
-
-func make_button_style(fill_color: Color) -> StyleBoxFlat:
-	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = fill_color
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = fill_color.lightened(0.22)
-	style.corner_radius_top_left = 16
-	style.corner_radius_top_right = 16
-	style.corner_radius_bottom_right = 16
-	style.corner_radius_bottom_left = 16
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.22)
-	style.shadow_size = 8
-	style.content_margin_left = 14
-	style.content_margin_top = 10
-	style.content_margin_right = 14
-	style.content_margin_bottom = 10
-	return style
+	BubbleUiTheme.apply_button(button, base_color, hover_color, pressed_color, 46.0)
 
 
 func update_layout() -> void:
 	viewport_size = get_viewport_rect().size
-	var target_width: float = viewport_size.x * 0.82
-	bubble_radius = minf(36.0, target_width / float(GRID_COLUMNS * 2 + 1))
+	bubble_radius = minf(42.0, viewport_size.x / float(GRID_COLUMNS * 2 + 1))
 	bubble_diameter = bubble_radius * 2.0
 	row_height = bubble_radius * 1.72
-	var grid_width: float = bubble_diameter * GRID_COLUMNS + bubble_radius
-	board_left = (viewport_size.x - grid_width) * 0.5
-	board_right = board_left + grid_width
-	board_top = viewport_size.y * 0.14
+	board_left = 0.0
+	board_right = viewport_size.x
+	playfield_top = viewport_size.y * 0.14
 	cannon_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.86)
 	lose_line_y = cannon_position.y - bubble_radius * 2.8
 	shot_speed = bubble_radius * 63.0
-	max_rows_visible = maxi(10, int(floor((lose_line_y - board_top - bubble_radius) / row_height)))
+	max_rows_visible = maxi(10, int(floor((lose_line_y - playfield_top - bubble_radius) / row_height)))
+	board_top = playfield_top
 	if aim_target == Vector2.ZERO:
 		aim_target = cannon_position + Vector2.UP * 320.0
 	generate_ambient_stars()
+	board.sync_float_adjacency(board_left, board_top, bubble_radius, bubble_diameter, row_height)
 	sync_shot_planner()
 	queue_redraw()
+
+
+func apply_runtime_settings() -> void:
+	settings = BubbleSaveManager.load_settings()
+	sfx.apply_settings(settings)
+	fps_label.visible = OS.is_debug_build() and bool(settings.get("show_fps_debug", true))
+	refresh_processing_state()
+
+
+func should_keep_processing_active() -> bool:
+	if not mobile_low_fx:
+		return true
+	if fps_label.visible:
+		return true
+	if session_paused:
+		return false
+	return (
+		state == STATE_FLYING
+		or launcher_flash > 0.0
+		or launcher_recoil > 0.0
+			or absf(stack_visual_offset) > 0.02
+			or absf(stack_settle_velocity) > 0.02
+			or row_arrival_flash > 0.0
+			or not pop_particles.is_empty()
+			or not pending_bursts.is_empty()
+		or not deferred_floating_bursts.is_empty()
+		or not burst_bubbles.is_empty()
+	)
+
+
+func refresh_processing_state(force_active: bool = false) -> void:
+	if not mobile_low_fx:
+		set_process(true)
+		return
+	set_process(force_active or should_keep_processing_active())
+
+
+func start_from_launch_request() -> void:
+	var request: Dictionary = BubbleSaveManager.consume_launch_request()
+	apply_runtime_settings()
+	if String(request.get("mode", "")) == "continue" and BubbleSaveManager.has_checkpoint():
+		load_checkpoint_run(BubbleSaveManager.load_checkpoint())
+		return
+	start_new_game()
 
 
 func sync_shot_planner() -> void:
@@ -319,7 +351,7 @@ func sync_shot_planner() -> void:
 		"bubble_diameter": bubble_diameter,
 		"row_height": row_height,
 		"max_rows_visible": max_rows_visible,
-		"start_rows": START_ROWS,
+		"start_rows": board.current_wave_visible_rows(),
 		"cannon_position": cannon_position,
 		"stack_visual_offset": stack_visual_offset,
 	})
@@ -344,22 +376,89 @@ func generate_ambient_stars() -> void:
 
 func start_new_game() -> void:
 	board.start_new_game(rng)
+	update_layout()
 	active_bubble.clear()
 	pop_particles.clear()
-	hit_waves.clear()
 	pending_bursts.clear()
+	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
 	stack_visual_offset = 0.0
 	stack_settle_velocity = 0.0
 	row_arrival_flash = 0.0
+	session_paused = false
+	overlay_mode = OVERLAY_NONE
 	overlay.visible = false
 	state = STATE_AIMING
+	game_over_recorded = false
+	last_run_rank = -1
+	last_run_personal_best = false
+	onboarding_active = not BubbleSaveManager.is_onboarding_complete()
+	onboarding_acknowledged_pop = false
 	kick_stack_drop(row_height * 0.58, true)
 	current_color = board.pick_shoot_color(rng)
 	next_color = board.pick_shoot_color(rng)
+	if onboarding_active:
+		board.status_message = "Match 3 bubbles of the same color."
+	BubbleSaveManager.clear_checkpoint()
+	save_checkpoint_if_safe(true)
 	refresh_hud()
+	refresh_processing_state(true)
 	queue_redraw()
+
+
+func restart_run() -> void:
+	start_new_game()
+
+
+func load_checkpoint_run(checkpoint: Dictionary) -> void:
+	board.import_state(Dictionary(checkpoint.get("board_state", {})))
+	grid = board.grid
+	update_layout()
+	active_bubble.clear()
+	pop_particles.clear()
+	pending_bursts.clear()
+	deferred_floating_bursts.clear()
+	burst_bubbles.clear()
+	pending_resolution.clear()
+	stack_visual_offset = 0.0
+	stack_settle_velocity = 0.0
+	row_arrival_flash = 0.0
+	session_paused = false
+	overlay_mode = OVERLAY_NONE
+	overlay.visible = false
+	state = STATE_AIMING
+	game_over_recorded = false
+	last_run_rank = -1
+	last_run_personal_best = false
+	onboarding_active = false
+	onboarding_acknowledged_pop = true
+	current_color = int(checkpoint.get("current_color", board.pick_shoot_color(rng)))
+	next_color = int(checkpoint.get("next_color", board.pick_shoot_color(rng)))
+	refresh_hud()
+	refresh_processing_state()
+	queue_redraw()
+
+
+func build_checkpoint() -> Dictionary:
+	return {
+		"board_state": board.export_state(),
+		"current_color": current_color,
+		"next_color": next_color,
+		"wave": board.wave,
+		"score": board.score,
+	}
+
+
+func save_checkpoint_if_safe(force: bool = false) -> void:
+	if not force:
+		if state != STATE_AIMING or session_paused:
+			return
+		if not active_bubble.is_empty() or not pending_bursts.is_empty() or not burst_bubbles.is_empty():
+			return
+		if overlay_mode == OVERLAY_GAME_OVER:
+			return
+	BubbleSaveManager.save_checkpoint(build_checkpoint())
 
 
 func fire_bubble() -> void:
@@ -391,6 +490,7 @@ func fire_bubble() -> void:
 	launcher_flash = 1.0
 	launcher_recoil = 1.0
 	sfx.play_shoot()
+	refresh_processing_state(true)
 	queue_redraw()
 
 
@@ -458,7 +558,6 @@ func place_active_bubble(anchor_cell: Vector2i, hit_ceiling: bool, forced_snap: 
 	var snap_center: Vector2 = cell_to_world(snap.x, snap.y)
 	spawn_pop_burst(cell_to_world(snap.x, snap.y), COLORS[int(active_bubble["color"])].lightened(0.18), 5, bubble_radius * 0.16)
 	if impact_type == "stack":
-		spawn_hit_wave(snap_center, 1.25)
 		spawn_stack_impact_sparks(snap_center, COLORS[int(active_bubble["color"])])
 	var resolution: Dictionary = board.resolve_placed_bubble(snap, int(active_bubble["color"]), rng)
 	active_bubble.clear()
@@ -475,10 +574,13 @@ func has_resolution_bursts(resolution: Dictionary) -> bool:
 
 func begin_resolution_sequence(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> void:
 	pending_resolution = resolution
-	pending_bursts = build_resolution_burst_queue(resolution, start_cell, origin)
+	var burst_phases: Dictionary = build_resolution_burst_phases(resolution, start_cell, origin)
+	pending_bursts = Array(burst_phases.get("cluster", []), TYPE_DICTIONARY, &"", null)
+	deferred_floating_bursts = Array(burst_phases.get("floating", []), TYPE_DICTIONARY, &"", null)
 	burst_bubbles.clear()
 	state = STATE_RESOLVING
 	refresh_hud()
+	refresh_processing_state(true)
 	queue_redraw()
 
 
@@ -496,13 +598,25 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 	state = STATE_AIMING
 
 	if resolution["board_cleared"]:
+		update_layout()
 		sfx.play_board_clear()
 		kick_stack_drop(row_height * 0.58, true)
 		current_color = board.pick_shoot_color(rng)
 		next_color = board.pick_shoot_color(rng)
+		if onboarding_active and not onboarding_acknowledged_pop:
+			onboarding_acknowledged_pop = true
+			onboarding_active = false
+			board.status_message = "Nice shot. Keep the stack away from the warning line."
+			BubbleSaveManager.set_onboarding_complete(true)
+		save_checkpoint_if_safe(true)
 		refresh_hud()
 		queue_redraw()
 		return
+
+	if resolution.get("chunk_advanced", false):
+		var promoted_rows: int = int(resolution.get("chunk_rows_promoted", 0))
+		var reveal_strength: float = row_height * clampf(float(maxi(promoted_rows, 1)), 1.0, 3.0) * 0.9
+		kick_stack_drop(reveal_strength, false)
 
 	if resolution["row_pushed"]:
 		kick_stack_drop(row_height * 0.92, false)
@@ -512,16 +626,32 @@ func complete_resolution_followup(resolution: Dictionary) -> void:
 
 	current_color = next_color
 	next_color = board.pick_shoot_color(rng)
+	if onboarding_active and resolution["total_removed"] >= 3 and not onboarding_acknowledged_pop:
+		onboarding_acknowledged_pop = true
+		onboarding_active = false
+		board.status_message = "Nice shot. Detached bubbles also fall."
+		BubbleSaveManager.set_onboarding_complete(true)
+	save_checkpoint_if_safe()
 	refresh_hud()
 	queue_redraw()
 
 
-func build_resolution_burst_queue(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> Array[Dictionary]:
+func build_resolution_burst_phases(resolution: Dictionary, start_cell: Vector2i, origin: Vector2) -> Dictionary:
 	var burst_row_parity_offset: int = resolution["burst_row_parity_offset"]
 	var cluster_entries: Array[Dictionary] = build_cluster_burst_entries(resolution["cluster_bursts"], start_cell, origin, burst_row_parity_offset)
 	var floating_entries: Array[Dictionary] = build_floating_burst_entries(resolution["floating_bursts"], origin, burst_row_parity_offset)
-	var cluster_step: float = 0.05 if mobile_low_fx else 0.042
-	var floating_step: float = 0.07 if mobile_low_fx else 0.058
+	var cluster_cells: Dictionary = {}
+	for cluster_entry in cluster_entries:
+		cluster_cells[cluster_entry["cell"]] = true
+	if not cluster_cells.is_empty():
+		var filtered_floating: Array[Dictionary] = []
+		for floating_entry in floating_entries:
+			if cluster_cells.has(floating_entry["cell"]):
+				continue
+			filtered_floating.append(floating_entry)
+		floating_entries = filtered_floating
+	var cluster_step: float = 0.04 if mobile_low_fx else 0.0336
+	var floating_step: float = 0.056 if mobile_low_fx else 0.0464
 	var cluster_particle_count: int = 4 if mobile_low_fx else 6
 	var floating_particle_count: int = 3 if mobile_low_fx else 5
 
@@ -537,21 +667,22 @@ func build_resolution_burst_queue(resolution: Dictionary, start_cell: Vector2i, 
 		floating_entry["duration"] = 0.22 if mobile_low_fx else 0.26
 		floating_entry["glow"] = 1.22
 
-	var queued: Array[Dictionary] = []
+	var queued_cluster: Array[Dictionary] = []
 	for index in range(cluster_entries.size()):
 		var cluster_entry: Dictionary = cluster_entries[index]
 		cluster_entry["delay"] = float(index) * cluster_step
-		queued.append(cluster_entry)
+		queued_cluster.append(cluster_entry)
 
-	var floating_start_delay: float = float(cluster_entries.size()) * cluster_step
-	if not floating_entries.is_empty():
-		floating_start_delay += 0.09 if mobile_low_fx else 0.07
+	var queued_floating: Array[Dictionary] = []
 	for index in range(floating_entries.size()):
 		var floating_entry: Dictionary = floating_entries[index]
-		floating_entry["delay"] = floating_start_delay + float(index) * floating_step
-		queued.append(floating_entry)
+		floating_entry["delay"] = float(index) * floating_step
+		queued_floating.append(floating_entry)
 
-	return queued
+	return {
+		"cluster": queued_cluster,
+		"floating": queued_floating,
+	}
 
 
 func build_cluster_burst_entries(cluster_bursts: Array, start_cell: Vector2i, origin: Vector2, parity_offset: int) -> Array[Dictionary]:
@@ -594,13 +725,14 @@ func build_cluster_burst_entries(cluster_bursts: Array, start_cell: Vector2i, or
 
 	var ordered_entries: Array[Dictionary] = []
 	for cluster_cell in ordered_cells:
-		var burst: Dictionary = burst_by_cell[cluster_cell]
-		var cluster_color: int = burst["color"]
-		ordered_entries.append({
-			"center": cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset),
-			"color": COLORS[cluster_color],
-			"burst_kind": "cluster",
-		})
+			var burst: Dictionary = burst_by_cell[cluster_cell]
+			var cluster_color: int = burst["color"]
+			ordered_entries.append({
+				"cell": cluster_cell,
+				"center": cell_to_world_with_parity(cluster_cell.x, cluster_cell.y, parity_offset),
+				"color": COLORS[cluster_color],
+				"burst_kind": "cluster",
+			})
 
 	return ordered_entries
 
@@ -658,6 +790,7 @@ func build_floating_burst_entries(floating_bursts: Array, origin: Vector2, parit
 			var cell: Vector2i = frontier.pop_front()
 			var burst: Dictionary = burst_by_cell[cell]
 			ordered_entries.append({
+				"cell": cell,
 				"center": cell_to_world_with_parity(cell.x, cell.y, parity_offset),
 				"color": COLORS[int(burst["color"])].darkened(0.05),
 				"burst_kind": "floating",
@@ -688,22 +821,144 @@ func check_loss_condition() -> bool:
 
 func end_game(message: String) -> void:
 	state = STATE_GAME_OVER
+	session_paused = false
 	active_bubble.clear()
 	pending_bursts.clear()
+	deferred_floating_bursts.clear()
 	burst_bubbles.clear()
 	pending_resolution.clear()
 	sfx.play_game_over()
+	record_high_score_if_needed()
+	show_game_over_overlay(message)
+	board.status_message = message
+	BubbleSaveManager.clear_checkpoint()
+	refresh_hud()
+	refresh_processing_state()
+	queue_redraw()
+
+
+func try_start_deferred_floating_phase() -> bool:
+	if not BubbleBurstSequenceGuard.should_start_floating_phase(deferred_floating_bursts, pending_bursts, burst_bubbles):
+		return false
+	pending_bursts = deferred_floating_bursts
+	deferred_floating_bursts = []
+	return true
+
+
+func record_high_score_if_needed() -> void:
+	if game_over_recorded:
+		return
+	game_over_recorded = true
+	var result: Dictionary = BubbleSaveManager.record_score({
+		"score": board.score,
+		"wave": board.wave,
+	})
+	last_run_rank = int(result.get("rank", -1))
+	last_run_personal_best = bool(result.get("is_personal_best", false))
+
+
+func show_pause_overlay() -> void:
+	if state == STATE_GAME_OVER:
+		return
+	session_paused = true
+	overlay_mode = OVERLAY_PAUSE
+	overlay.visible = true
+	overlay_title.text = "Paused"
+	overlay_message.text = "Take a breath. Resume when you're ready."
+	overlay_primary_button.text = "Resume"
+	overlay_secondary_button.text = "Restart"
+	overlay_secondary_button.visible = true
+	overlay_tertiary_button.text = "Main Menu"
+	overlay_tertiary_button.visible = true
+	refresh_hud()
+
+
+func show_game_over_overlay(message: String) -> void:
+	overlay_mode = OVERLAY_GAME_OVER
 	overlay.visible = true
 	overlay_title.text = "Game Over"
-	overlay_message.text = "%s\nFinal score: %d" % [message, board.score]
-	board.status_message = message
+	var summary_lines: Array[String] = [
+		message,
+		"Final score: %d" % board.score,
+		"Wave reached: %d" % board.wave,
+	]
+	if last_run_personal_best:
+		summary_lines.append("New personal best.")
+	elif last_run_rank > 0:
+		summary_lines.append("High score rank: #%d" % last_run_rank)
+	overlay_message.text = "\n".join(summary_lines)
+	overlay_primary_button.text = "Retry"
+	overlay_secondary_button.text = "Main Menu"
+	overlay_secondary_button.visible = true
+	overlay_tertiary_button.visible = false
+
+
+func hide_overlay() -> void:
+	overlay.visible = false
+	overlay_mode = OVERLAY_NONE
+
+
+func toggle_pause() -> void:
+	if state == STATE_GAME_OVER:
+		return
+	if session_paused:
+		resume_game()
+	else:
+		show_pause_overlay()
+
+
+func resume_game() -> void:
+	session_paused = false
+	hide_overlay()
 	refresh_hud()
+	refresh_processing_state()
 	queue_redraw()
+
+
+func return_to_menu() -> void:
+	BubbleSaveManager.set_launch_request({})
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+func handle_back_request() -> void:
+	if overlay_mode == OVERLAY_GAME_OVER:
+		return_to_menu()
+		return
+	if overlay_mode == OVERLAY_PAUSE:
+		return_to_menu()
+		return
+	show_pause_overlay()
+
+
+func _on_overlay_primary_pressed() -> void:
+	if overlay_mode == OVERLAY_PAUSE:
+		resume_game()
+		return
+	start_new_game()
+
+
+func _on_overlay_secondary_pressed() -> void:
+	if overlay_mode == OVERLAY_PAUSE:
+		start_new_game()
+		return
+	return_to_menu()
+
+
+func _on_overlay_tertiary_pressed() -> void:
+	if overlay_mode == OVERLAY_PAUSE:
+		return_to_menu()
 
 
 func refresh_hud() -> void:
 	score_label.text = "Score: %d    Wave: %d" % [board.score, board.wave]
 	status_label.text = "%s  Row in %d shots." % [board.status_message, board.shots_until_shift]
+	pause_button.text = "Resume" if session_paused else "Pause"
+	restart_button.disabled = state == STATE_GAME_OVER
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_checkpoint_if_safe()
 
 
 func row_shift_parity(row: int) -> int:
@@ -769,17 +1024,6 @@ func clamped_aim_direction() -> Vector2:
 		direction = Vector2.UP
 	var angle: float = atan2(direction.y, direction.x)
 	angle = clamp(angle, deg_to_rad(-162.0), deg_to_rad(-18.0))
-	var center_angle: float = -PI * 0.5
-	var angle_step: float = deg_to_rad(1.6)
-	sync_shot_planner()
-	for _index in range(24):
-		var candidate_direction: Vector2 = Vector2(cos(angle), sin(angle)).normalized()
-		if not shot_planner.first_wall_bounce_too_low(candidate_direction):
-			return candidate_direction
-		if angle < center_angle:
-			angle += angle_step
-		else:
-			angle -= angle_step
 	return Vector2(cos(angle), sin(angle)).normalized()
 
 
@@ -810,6 +1054,7 @@ func update_stack_animation(delta: float) -> bool:
 
 
 func kick_stack_drop(strength: float, gentle: bool) -> void:
+	refresh_processing_state(true)
 	if mobile_low_fx:
 		var mobile_strength: float = minf(strength, row_height * 0.62)
 		stack_visual_offset = maxf(stack_visual_offset - mobile_strength, -row_height * 0.78)
@@ -875,27 +1120,6 @@ func update_particles(delta: float) -> bool:
 	return not pop_particles.is_empty()
 
 
-func update_hit_waves(delta: float) -> bool:
-	if hit_waves.is_empty():
-		return false
-
-	var write_index: int = 0
-	for read_index in range(hit_waves.size()):
-		var wave: Dictionary = hit_waves[read_index]
-		var age: float = wave["age"] + delta
-		var duration: float = wave["duration"]
-		if age >= duration:
-			continue
-		wave["age"] = age
-		hit_waves[write_index] = wave
-		write_index += 1
-
-	if write_index != hit_waves.size():
-		hit_waves.resize(write_index)
-
-	return not hit_waves.is_empty()
-
-
 func update_pending_bursts(delta: float) -> bool:
 	if pending_bursts.is_empty():
 		return false
@@ -905,6 +1129,11 @@ func update_pending_bursts(delta: float) -> bool:
 		var burst: Dictionary = pending_bursts[read_index]
 		var delay: float = burst["delay"] - delta
 		if delay <= 0.0:
+			if String(burst["burst_kind"]) == "floating" and not BubbleBurstSequenceGuard.can_activate_floating_burst(pending_bursts, burst_bubbles):
+				burst["delay"] = 0.0
+				pending_bursts[write_index] = burst
+				write_index += 1
+				continue
 			activate_burst_bubble(burst)
 			continue
 		burst["delay"] = delay
@@ -967,104 +1196,6 @@ func trigger_pop_haptic() -> void:
 		return
 	last_pop_haptic_ms = now
 	Input.vibrate_handheld(16, 0.45)
-
-
-func spawn_hit_wave(origin: Vector2, strength: float) -> void:
-	var durations: Array[float] = []
-	var delays: Array[float] = []
-	var strengths: Array[float] = []
-	if mobile_low_fx:
-		durations.append(0.48)
-		durations.append(0.66)
-		delays.append(0.0)
-		delays.append(0.05)
-		strengths.append(strength)
-		strengths.append(strength * 0.82)
-	else:
-		durations.append(0.62)
-		durations.append(0.82)
-		durations.append(1.0)
-		delays.append(0.0)
-		delays.append(0.04)
-		delays.append(0.09)
-		strengths.append(strength)
-		strengths.append(strength * 0.92)
-		strengths.append(strength * 0.68)
-	for index in range(durations.size()):
-		var wave_speed: float = bubble_radius * (15.0 + float(index) * 2.8)
-		var wave_width: float = bubble_radius * (2.2 + float(index) * 0.45)
-		if not mobile_low_fx:
-			wave_speed = bubble_radius * (11.5 + float(index) * 2.0)
-			wave_width = bubble_radius * (3.8 + float(index) * 0.8)
-		hit_waves.append({
-			"origin": origin,
-			"age": -delays[index],
-			"duration": durations[index],
-			"speed": wave_speed,
-			"width": wave_width,
-			"strength": strengths[index],
-		})
-	while hit_waves.size() > MAX_HIT_WAVES:
-		hit_waves.remove_at(0)
-
-
-func evaluate_hit_wave_transform(center: Vector2) -> void:
-	wave_transform_offset = Vector2.ZERO
-	wave_transform_scale = 1.0
-	wave_transform_glow = 0.0
-
-	if hit_waves.is_empty():
-		return
-
-	var max_radius: float = bubble_diameter * 2.7
-
-	for wave in hit_waves:
-		var origin: Vector2 = wave["origin"]
-		var age: float = wave["age"]
-		if age <= 0.0:
-			continue
-		var strength: float = wave["strength"]
-		var to_center: Vector2 = center - origin
-		var distance: float = to_center.length()
-		var travel_speed: float = wave["speed"]
-		if distance > max_radius:
-			continue
-
-		var distance_fade: float = maxf(0.0, 1.0 - distance / max_radius)
-		distance_fade = distance_fade * distance_fade
-		var amplitude: float = 0.0
-		if mobile_low_fx:
-			var ring_radius: float = age * travel_speed
-			var ring_width: float = maxf(wave["width"] * 1.35, bubble_radius * 0.9)
-			var ring_delta: float = absf(distance - ring_radius)
-			if ring_delta > ring_width:
-				continue
-			amplitude = (1.0 - ring_delta / ring_width) * distance_fade * strength * 0.42
-		else:
-			var arrival_time: float = distance / maxf(travel_speed, 1.0)
-			var local_time: float = age - arrival_time
-			var blast_time: float = age - arrival_time * 0.35
-			if local_time <= -0.02 and blast_time <= 0.0:
-				continue
-
-			var oscillation: float = 0.0
-			if local_time > 0.0:
-				var oscillation_window: float = 0.34
-				if local_time < oscillation_window:
-					var oscillation_phase: float = local_time / oscillation_window
-					oscillation = maxf(0.0, sin(oscillation_phase * PI * 3.2)) * pow(1.0 - oscillation_phase, 1.7)
-			var blast: float = 0.0
-			if blast_time > 0.0:
-				blast = exp(-blast_time * 11.0)
-			amplitude = (absf(oscillation) * 0.62 + blast * 0.48) * distance_fade * strength
-
-		if amplitude <= 0.001:
-			continue
-
-		var direction: Vector2 = Vector2.ZERO if distance <= 0.001 else to_center / distance
-		wave_transform_offset += direction * bubble_radius * (0.18 * amplitude)
-		wave_transform_scale += 0.16 * amplitude
-		wave_transform_glow += 0.62 * amplitude
 
 
 func spawn_stack_impact_sparks(center: Vector2, bubble_color: Color) -> void:
@@ -1170,7 +1301,7 @@ func draw_playfield() -> void:
 
 	if row_arrival_flash > 0.0:
 		var entry_rect: Rect2 = Rect2(
-			Vector2(frame_rect.position.x + bubble_radius * 0.08, board_top - bubble_radius * 0.55 + stack_visual_offset),
+			Vector2(frame_rect.position.x + bubble_radius * 0.08, playfield_top - bubble_radius * 0.55 + stack_visual_offset),
 			Vector2(frame_rect.size.x - bubble_radius * 0.16, row_height * 1.1)
 		)
 		draw_rect(entry_rect, Color(0.72, 0.97, 1.0, 0.12 * row_arrival_flash), true)
@@ -1206,7 +1337,7 @@ func draw_playfield() -> void:
 		3.0
 	)
 
-	var show_empty_slots: bool = not mobile_low_fx or (state == STATE_AIMING and absf(stack_visual_offset) < 0.02 and row_arrival_flash <= 0.0 and hit_waves.is_empty())
+	var show_empty_slots: bool = not mobile_low_fx or (state == STATE_AIMING and absf(stack_visual_offset) < 0.02 and row_arrival_flash <= 0.0)
 	if show_empty_slots:
 		var rows_to_draw: int = mini(grid.size() + 2, max_rows_visible)
 		for row in range(rows_to_draw):
@@ -1232,24 +1363,16 @@ func draw_lose_line() -> void:
 
 
 func draw_bubbles() -> void:
-	var rows_to_draw: int = mini(grid.size(), max_rows_visible + 1)
+	var source_rows: Array[Array] = grid
+	var rows_to_draw: int = mini(source_rows.size(), max_rows_visible + 1)
 	for row in range(rows_to_draw):
 		for col in range(GRID_COLUMNS):
-			if grid[row][col] == BubbleBoardState.EMPTY_CELL:
+			if int(source_rows[row][col]) == BubbleBoardState.EMPTY_CELL:
 				continue
 			var bubble_center: Vector2 = cell_to_world(row, col)
 			if bubble_center.y > lose_line_y + bubble_radius:
 				continue
-			evaluate_hit_wave_transform(bubble_center)
-			var transformed_center: Vector2 = bubble_center + wave_transform_offset
-			var row_glow: float = 1.0
-			var row_radius: float = bubble_radius
-			if row == 0 and row_arrival_flash > 0.0:
-				row_glow += row_arrival_flash * 0.7
-				row_radius *= 1.0 + row_arrival_flash * 0.06
-			row_glow += wave_transform_glow
-			row_radius *= wave_transform_scale
-			draw_bubble(transformed_center, COLORS[int(grid[row][col])], row_radius, row_glow)
+			draw_bubble(bubble_center, COLORS[int(source_rows[row][col])], bubble_radius, 1.0)
 
 	if not active_bubble.is_empty():
 		draw_flying_bubble(
@@ -1307,13 +1430,11 @@ func draw_burst_bubbles() -> void:
 
 
 func draw_pending_burst_bubbles() -> void:
-	for burst in pending_bursts:
-		if burst["burst_kind"] == "cluster":
-			draw_bubble(burst["center"], burst["color"], bubble_radius, 1.08)
-			continue
-		var pending_color: Color = burst["color"]
-		pending_color.a = 0.52
-		draw_bubble(burst["center"] + Vector2(0.0, bubble_radius * 0.04), pending_color, bubble_radius * 0.96, 0.62)
+	var preview_bursts: Array[Dictionary] = BubbleBurstSequenceGuard.visible_preview_bursts(pending_bursts, deferred_floating_bursts)
+	for burst in preview_bursts:
+		var is_preview_only: bool = bool(burst.get("preview_only", false))
+		var glow: float = 1.0 if is_preview_only else (1.08 if burst["burst_kind"] == "cluster" else 0.92)
+		draw_bubble(burst["center"], burst["color"], bubble_radius, glow)
 
 
 func draw_flying_bubble(center: Vector2, bubble_color: Color, direction: Vector2, launch_age: float) -> void:
@@ -1388,7 +1509,6 @@ func trace_aim_path(direction: Vector2) -> Array[Vector2]:
 func draw_aim_guide(direction: Vector2) -> void:
 	if state != STATE_AIMING:
 		return
-
 	var points: Array[Vector2] = trace_aim_path(direction)
 	if points.size() < 2:
 		return
@@ -1413,37 +1533,46 @@ func draw_aim_guide(direction: Vector2) -> void:
 
 
 func draw_bubble(center: Vector2, bubble_color: Color, radius: float, glow_strength: float) -> void:
-	var pulse: float = 1.0
-	if not mobile_low_fx:
-		pulse = 1.0 + sin(visual_time * 2.4 + center.x * 0.018 + center.y * 0.011) * 0.028
-	var animated_radius: float = radius * pulse
-	var shadow_color: Color = Color(0.0, 0.0, 0.0, 0.26)
-	var glow_color: Color = bubble_color
-	glow_color.a = 0.11 * glow_strength
-	if mobile_low_fx:
-		draw_circle(center, animated_radius * 1.12, Color(glow_color.r, glow_color.g, glow_color.b, glow_color.a * 0.72))
-		draw_circle(center + Vector2(0.0, animated_radius * 0.12), animated_radius * 1.01, shadow_color)
-		draw_circle(center, animated_radius, bubble_color.darkened(0.06))
-		draw_circle(center + Vector2(-animated_radius * 0.12, -animated_radius * 0.14), animated_radius * 0.62, bubble_color.lightened(0.18))
-		draw_circle(center + Vector2(-animated_radius * 0.24, -animated_radius * 0.26), animated_radius * 0.2, Color(1.0, 1.0, 1.0, 0.3))
-		return
+	# Plain PNG-check mode: pulse, glow, and shadow are temporarily disabled.
+	#var pulse: float = 1.0
+	#if not mobile_low_fx:
+	#	pulse = 1.0 + sin(visual_time * 2.4 + center.x * 0.018 + center.y * 0.011) * 0.028
+	#var animated_radius: float = radius * pulse
+	#var shadow_color: Color = Color(0.0, 0.0, 0.0, 0.26)
+	#var glow_color: Color = bubble_color
+	#glow_color.a = 0.11 * glow_strength
+	var bubble_texture: Texture2D = get_bubble_texture_for_color(bubble_color)
+	#var glow_radius: float = animated_radius * (1.14 if mobile_low_fx else 1.24 + glow_strength * 0.04)
+	#draw_circle(center, glow_radius, Color(glow_color.r, glow_color.g, glow_color.b, glow_color.a * (0.74 if mobile_low_fx else 1.0)))
+	#draw_circle(center + Vector2(0.0, animated_radius * 0.14), animated_radius * 1.02, shadow_color)
+	#var texture_rect: Rect2 = Rect2(center - Vector2.ONE * animated_radius, Vector2.ONE * animated_radius * 2.0)
+	var draw_radius: float = radius / 0.84
+	var texture_rect: Rect2 = Rect2(center - Vector2.ONE * draw_radius, Vector2.ONE * draw_radius * 2.0)
+	draw_texture_rect(bubble_texture, texture_rect, false, bubble_color)
+	#if mobile_low_fx:
+	#	return
+	#draw_circle(center + Vector2(-animated_radius * 0.2, -animated_radius * 0.22), animated_radius * 0.14, Color(1.0, 1.0, 1.0, 0.18))
+	#draw_circle(center + Vector2(animated_radius * 0.22, animated_radius * 0.24), animated_radius * 0.34, Color(0.0, 0.0, 0.0, 0.06))
 
-	draw_circle(center, animated_radius * (1.28 + glow_strength * 0.05), glow_color)
-	draw_circle(center + Vector2(0.0, animated_radius * 0.16), animated_radius * 1.04, shadow_color)
 
-	draw_circle(center, animated_radius, bubble_color.darkened(0.08))
-	draw_circle(center + Vector2(-animated_radius * 0.1, -animated_radius * 0.12), animated_radius * 0.82, bubble_color.lightened(0.14))
-	draw_circle(center + Vector2(-animated_radius * 0.18, -animated_radius * 0.2), animated_radius * 0.56, bubble_color.lightened(0.25))
-	draw_circle(center + Vector2(-animated_radius * 0.26, -animated_radius * 0.28), animated_radius * 0.24, Color(1.0, 1.0, 1.0, 0.34))
-	draw_circle(center + Vector2(animated_radius * 0.22, animated_radius * 0.24), animated_radius * 0.38, Color(0.0, 0.0, 0.0, 0.08))
-
-	draw_arc(center, animated_radius * 0.95, deg_to_rad(215.0), deg_to_rad(340.0), 32, bubble_color.darkened(0.45), maxf(2.0, animated_radius * 0.11), true)
-	draw_arc(center, animated_radius * 0.82, deg_to_rad(22.0), deg_to_rad(150.0), 24, Color(1.0, 1.0, 1.0, 0.18), maxf(1.6, animated_radius * 0.08), true)
-	draw_circle(center + Vector2(-animated_radius * 0.06, -animated_radius * 0.08), animated_radius * 0.08, Color(1.0, 1.0, 1.0, 0.18))
+func get_bubble_texture_for_color(bubble_color: Color) -> Texture2D:
+	var best_index: int = 0
+	var best_distance: float = INF
+	for index in range(mini(COLORS.size(), BUBBLE_TEXTURES.size())):
+		var base_color: Color = COLORS[index]
+		var distance: float = (
+			pow(base_color.r - bubble_color.r, 2.0)
+			+ pow(base_color.g - bubble_color.g, 2.0)
+			+ pow(base_color.b - bubble_color.b, 2.0)
+		)
+		if distance < best_distance:
+			best_distance = distance
+			best_index = index
+	return BUBBLE_TEXTURES[best_index]
 
 
 func get_playfield_rect() -> Rect2:
 	return Rect2(
-		Vector2(board_left - bubble_radius * 0.65, board_top - bubble_radius * 0.65),
-		Vector2(board_right - board_left + bubble_radius * 1.3, lose_line_y - board_top + bubble_radius * 0.6)
+		Vector2(board_left, playfield_top - bubble_radius * 0.18),
+		Vector2(board_right - board_left, lose_line_y - playfield_top + bubble_radius * 0.18)
 	)

@@ -4,9 +4,10 @@ These instructions are specific to this repository and should be followed by eve
 
 ## Architecture
 
-- Keep `scripts/game.gd` focused on scene orchestration, input handling, HUD updates, and rendering.
-- Keep board rules, scoring, wave progression, and bubble matching in `scripts/board_state.gd`.
-- Keep shot simulation, aim assist, bounce prediction, and snap targeting in `scripts/shot_planner.gd`.
+- Keep `scripts/gameplay/game.gd` focused on scene orchestration, input handling, HUD updates, and rendering.
+- Keep board rules, scoring, wave progression, and bubble matching in `scripts/gameplay/board_state.gd`.
+- Keep shot simulation, aim assist, bounce prediction, and snap targeting in `scripts/gameplay/shot_planner.gd`.
+- Related layout: `scripts/audio/`, `scripts/ui/`, `scripts/data/`, `tests/unit/`, `tests/helpers/`.
 - Do not collapse the gameplay back into a single large script unless the user explicitly asks for it.
 
 ## Change Hygiene
